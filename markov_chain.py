@@ -1,78 +1,52 @@
-import matplotlib
 import pandas as pd
 from sklearn.model_selection import train_test_split
 import numpy as np
 import networkx as nx
-import matplotlib.pyplot as plt
 from pprint import pprint
 
-df_events = pd.read_csv('ecommerce-dataset/events.csv')
-# print(df_events['event'].value_counts())
+df = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items.csv')
 
-df_events.sort_values(by=['timestamp'], inplace=True)
-# encoding categorical to numerical. states: view, transaction, addtocart
+maximum_categories = 1698
 
-df_events['event'] = df_events['event'].astype('category')
-df_events['event_cat'] = df_events['event'].cat.codes
+dict_categories = dict()
+dict_categories = dict.fromkeys(range(maximum_categories+1), 0)
+# print(dict_categories)
 
-y = df_events['event_cat']
-X = df_events.drop(['event_cat', 'event'], axis=1)
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3)
-# print(df_events.head(20))
-# print(X_train.head())
-# print(y_train.head())
-
-
-def get_transition_matrix(sequence):
-    n = 1 + max(sequence)  # number of states
-
-    total_trans_from_0 = 0
-    total_trans_from_1 = 0
-    total_trans_from_2 = 0
+def get_transition_matrix(sequence): # sequence of items' categories in history
+    n = 1 + maximum_categories # max(sequence)  # number of states
 
     M = np.zeros([n, n], dtype=float)  # creating initial matrix of all-zeros
 
     for (i, j) in zip(sequence, sequence[1:]):  # to connect "sequences" of 2 events, followed by each other
         M[i][j] += 1
-        if i == 0:
-            total_trans_from_0 += 1
-        elif i == 1:
-            total_trans_from_1 += 1
-        elif i == 2:
-            total_trans_from_2 += 1
-
+        dict_categories[i] += 1
+    # print(dict_categories)
+    #for r in M: print(' '.join('{0:.5f}'.format(x) for x in r))
+    
     # go trough matrix, to convert to probabilities -> using Laplace smoothing:
     for i in range(len(M)):
         for j in range(len(M[i])):
-            if i == 0:
-                M[i][j] = (M[i][j]+1)/(total_trans_from_0+3)
-            elif i == 1:
-                M[i][j] = (M[i][j]+1)/(total_trans_from_1+3)
-            elif i == 2:
-                M[i][j] = (M[i][j]+1)/(total_trans_from_2+3)
+            # print(dict_categories[i])
+            M[i][j] = (M[i][j] + 1) / (dict_categories[i] + maximum_categories)
+
     return M
 
-
-y_train = y_train.to_numpy()
+y = df['value']
+X = df.drop(['value'], axis=1)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.7)
 m = get_transition_matrix(y_train)
-for r in m: print(' '.join('{0:.5f}'.format(x) for x in r))
+# for r in m: print(' '.join('{0:.5f}'.format(x) for x in r))
+last_category = y_train.iloc[[-1]]
+print("last category: %s" % last_category)
+going_state = np.argmax(np.amax(m[last_category], axis=0))       # np.amax(m[last_category])# np.argmax(np.max(m[last_category], axis=0))
+print("prediction ... it is more probable a transition FROM the last state {} TO {}".format(last_category.to_string(index=False), going_state))
 
-# get last element in sequence (in the dataset)
-last_event = y_train[-1]
-# print(last_event)
-print("Next event in sequence of categories. Prediction of next item's category.")
-print("Probability to transition to an event of type 'addtocart': ", m[last_event][0])
-print("Probability to transition to an event of type 'transaction': ", m[last_event][1])
-print("Probability to transition to an event of type 'view': ", m[last_event][2])
-
-
-### TRANSITIONS GRAPH
+################### TRANSITIONS GRAPH - EXPERIMENTS
 
 # create a function that maps transition probability dataframe
 # to markov edges and weights
 
-def _get_markov_edges(Q):
+def get_markov_edges(Q):
     edges = {}
     for col in Q.columns:
         for idx in Q.index:
@@ -81,9 +55,8 @@ def _get_markov_edges(Q):
 
 
 def get_transitions_diagram(m):
-    edges_wts = _get_markov_edges(pd.DataFrame(m))
+    edges_wts = get_markov_edges(pd.DataFrame(m))
     pprint(edges_wts)
-
 
     # create graph object
     G = nx.MultiDiGraph()
@@ -105,6 +78,6 @@ def get_transitions_diagram(m):
     # create edge labels for jupyter plot but is not necessary
     edge_labels = {(n1,n2):d['label'] for n1,n2,d in G.edges(data=True)}
     nx.draw_networkx_edge_labels(G , pos, edge_labels=edge_labels)
-    nx.drawing.nx_pydot.write_dot(G, 'retail_rocket_markov_chain.dot')
+    nx.drawing.nx_pydot.write_dot(G, '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/retail_rocket_markov_chain.dot')
     nx.draw(G)
     plt.show()'''
