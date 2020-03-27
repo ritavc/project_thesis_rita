@@ -33,12 +33,12 @@ def statistical_analysis_events():
 
 
 def statistical_analysis_items():
-    # print(df_events['event'].value_counts())
+    print(df_events['event'].value_counts())
     print("Nr of instances in items dataset: %s "%(df_items.shape,))
     df_items.sort_values(by=['itemid'], inplace=True)
 
-    # items = df_events["itemid"].unique()
-    # print("Unique items: %s"%(items.shape,))
+    items = df_events["itemid"].unique()
+    print("Unique items: %s"%(items.shape,))
 
     times = []
     for i in df_items['timestamp']:
@@ -68,43 +68,20 @@ def statistical_analysis_category_tree():
     print("minimum: %s " % np.amin(df_cat.categoryid))
 
 
-def new_dataset(): # joining events dataset with items dataset.
-    df_items = df_items.rename(columns={'timestamp': 'timestamp_2'}, inplace=True)
-    df_items = df_items[(df_items['property'] == 'categoryid')]
-    print(df_items.head())
-    print(df_events.head())
-    df_final = df_events.merge(df_items, on=['itemid'])
-    # print(df_final.head())
-    df_final.drop(['timestamp_2', 'id'], axis=1, inplace=True)
-    df_final.sort_values(by=['timestamp'], inplace=True)
-    print(df_final.head())
-    df_final.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/df_final.csv')
 
-new_dataset()
 
-def create_temporary_subset():
-    # exclude items that do not account for category
-    df_items_copy = df_items.copy()
-    df_events_copy = df_events.copy()
 
-    indexes_not_category = df_items_copy[df_items_copy['property'] != 'categoryid'].index  # get indexes of rows that do not have categoryid as property.
-    df_items_copy.drop(indexes_not_category, inplace=True)
 
-    df_events_copy.sort_values(by=['timestamp'], inplace=True)
-    print("entrando no loop")
-    for index, row in df_events_copy.iterrows():
-        itemid = row['itemid']
-        print(itemid)
-        if itemid not in df_items_copy['itemid']:
-            print("%s...not in df_items" % itemid)
-            df_events_copy.drop(index, inplace=True)
-    print("chegou aqui")
-    df_events_copy.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/events_copy.csv')
-    print("done 1:)")
-    df_items_copy.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/items_copy.csv')
-    print("done 2:)")
-    return 0
-# statistical_analysis_category_tree()
-# statistical_analysis_events()
-# statistical_analysis_items()
+
+
+
+
+
+
+
+
+
+
+#statistical_analysis_events()
+#statistical_analysis_items()
 

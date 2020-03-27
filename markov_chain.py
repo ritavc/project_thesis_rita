@@ -8,7 +8,6 @@ df = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/join
 
 maximum_categories = 1698
 
-dict_categories = dict()
 dict_categories = dict.fromkeys(range(maximum_categories+1), 0)
 # print(dict_categories)
 
@@ -21,8 +20,7 @@ def get_transition_matrix(sequence): # sequence of items' categories in history
         M[i][j] += 1
         dict_categories[i] += 1
     # print(dict_categories)
-    #for r in M: print(' '.join('{0:.5f}'.format(x) for x in r))
-    
+
     # go trough matrix, to convert to probabilities -> using Laplace smoothing:
     for i in range(len(M)):
         for j in range(len(M[i])):
@@ -30,10 +28,17 @@ def get_transition_matrix(sequence): # sequence of items' categories in history
             M[i][j] = (M[i][j] + 1) / (dict_categories[i] + maximum_categories)
 
     return M
-
+df.sort_values(by=['timestamp'], inplace=True)
 y = df['value']
 X = df.drop(['value'], axis=1)
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.7)
+'''
+train_size = int(len(dataset) * 0.67)
+test_size = len(dataset) - train_size
+train, test = dataset[0:train_size,:], dataset[train_size:len(dataset),:]
+print(len(train), len(test))
+
+'''
 m = get_transition_matrix(y_train)
 # for r in m: print(' '.join('{0:.5f}'.format(x) for x in r))
 last_category = y_train.iloc[[-1]]
