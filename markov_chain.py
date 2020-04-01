@@ -31,7 +31,10 @@ def get_transition_matrix(sequence): # sequence of items' categories in history
 df.sort_values(by=['timestamp'], inplace=True)
 y = df['value']
 X = df.drop(['value'], axis=1)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.7)
+train_pct_index = int(0.7 * len(X))
+X_train, X_test = X[:train_pct_index], X[train_pct_index:]
+y_train, y_test = y[:train_pct_index], y[train_pct_index:]
+#X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.7)
 '''
 train_size = int(len(dataset) * 0.67)
 test_size = len(dataset) - train_size
