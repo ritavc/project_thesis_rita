@@ -11,15 +11,7 @@ df_cat = df_cat.fillna(-1)
 df_cat['parentid'] = df_cat['parentid'].astype(int)
 
 # print(df_cat.head(25))
-'''
-df_items.rename(columns={'timestamp': 'timestamp_2'}, inplace=True)
-df_items = df_items[(df_items['property'] == 'categoryid')]
-df_final = df_events.merge(df_items, on=['itemid'])
-df_final.drop(['timestamp_2', 'id'], axis=1, inplace=True)
-df_final.sort_values(by=['timestamp'], inplace=True)
-# print(df_final.head())
-# print("maximum cat: %s " % np.amax(df_final.value))
-# df_final.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items.csv')'''
+
 
 def nested_search(parentId, dictionary, result):
     #print("parentId : {}".format(parentId))

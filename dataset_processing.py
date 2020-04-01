@@ -1,6 +1,15 @@
 import pandas as pd
 import datetime
 import numpy as np
+'''
+df_items.rename(columns={'timestamp': 'timestamp_2'}, inplace=True)
+df_items = df_items[(df_items['property'] == 'categoryid')]
+df_final = df_events.merge(df_items, on=['itemid'])
+df_final.drop(['timestamp_2', 'id'], axis=1, inplace=True)
+df_final.sort_values(by=['timestamp'], inplace=True)
+# print(df_final.head())
+# print("maximum cat: %s " % np.amax(df_final.value))
+# df_final.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items.csv')'''
 
 def item_properties_concat():
     df1 = pd.read_csv("/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/item_properties_part1.csv")
@@ -19,7 +28,7 @@ def item_properties_concat():
 df_items = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/item_properties.csv')
 df_cat = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_tree.csv')
 df_events = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/events.csv')
-
+df_final = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items.csv')
 
 def statistical_analysis_events():
     # print(df_events['event'].value_counts())
@@ -53,8 +62,6 @@ def statistical_analysis_items():
     print(df_items.loc[(df_items.itemid == 178601) & (df_items.property == 'categoryid')])
     print(df_items.loc[(df_items.itemid == 346165) & (df_items.property == 'categoryid')])
 
-
-
 def statistical_analysis_category_tree():
     # print(df_events['event'].value_counts())
     print("Nr of instances in category tree dataset: %s" % (df_cat.shape, ))
@@ -67,21 +74,16 @@ def statistical_analysis_category_tree():
     print("maximum: %s "%np.amax(df_cat.categoryid))
     print("minimum: %s " % np.amin(df_cat.categoryid))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #statistical_analysis_events()
 #statistical_analysis_items()
 
+def group_sessions():
+    groups = df_events.sort_values(['visitorid'], ascending=True).groupby('visitorid')
+    pd.options.display.max_columns
+    pd.set_option('display.max_columns', None)
+    for name, group in groups:
+        print(name)
+        print(group)
+    #print(groups.head())
+    #print(groups.get_group(1340177))
+group_sessions()
