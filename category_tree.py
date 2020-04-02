@@ -3,8 +3,6 @@ from collections import defaultdict
 import numpy as np
 from anytree.exporter import DotExporter
 
-df_items = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/bla/item_properties.csv')
-df_events = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/bla/events.csv')
 df_cat = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_tree.csv')
 
 df_cat = df_cat.fillna(-1)
@@ -193,85 +191,141 @@ level_1 = 0
 level_2 = 0
 level_3 = 0
 k = 0
-def pretty(d, indent=0):
+list_level1 = []
+dict_level1 = {}
+def pretty(d, indent=0, p=-1):
     global level_0
     global level_1
     global level_2
     global level_3
     global k
+    global dict_level1
     k += 1
     for key, value in d.items():
         print('\t\t-\t' * indent + str(key))
         #print("LEVEL {}".format(indent))
         if indent == 0:
             level_0 += 1
+            list_level1.append(key)
+            #if p == -1:
+            p = key
+            dict_level1[p] = []
+
         elif indent == 1:
             level_1 += 1
+            if p != -1:
+                dict_level1[p].append(key)
+
         elif indent == 2:
             level_2 += 1
+            if p != -1:
+                dict_level1[p].append(key)
         elif indent == 3:
             level_3 += 1
+            if p != -1:
+                dict_level1[p].append(key)
 
         if isinstance(value, dict):
-            pretty(value, indent+1)
+            pretty(value, indent+1, p)
         elif isinstance(value, list):
             for i in range(0, len(value)):
                 if isinstance(value[i], dict):
-                    pretty(value[i], indent + 1)
+                    pretty(value[i], indent + 1, p)
                 else:
-                    #print("LEVEL {}".format(indent))
                     print('\t\t-\t' * (indent + 1) + str(value[i]))
+
                     #print("LEVEL {}".format(indent+1))
                     if (indent+1) == 0:
                         level_0 += 1
+                        list_level1.append(value[i])
+                        #if p == -1:
+                        p = key
+                        dict_level1[p] = []
                     elif (indent+1) == 1:
                         level_1 += 1
+                        if p != -1:
+                            dict_level1[p].append(value[i])
+
                     elif (indent+1) == 2:
                         level_2 += 1
+                        if p != -1:
+                            dict_level1[p].append(value[i])
+
                     elif (indent+1) == 3:
                         level_3 += 1
+                        if p != -1:
+                            dict_level1[p].append(value[i])
+
         else:
-            #print("LEVEL {}".format(indent))
             print('\t\t-\t' * (indent+1) + str(value))
+            #print("LEVEL {}".format(indent))
+
             if (indent + 1) == 0:
                 level_0 += 1
+                #if p == -1:
+                p = key
+                dict_level1[p] = []
+
+                list_level1.append(value)
             elif (indent + 1) == 1:
                 level_1 += 1
+                if p != -1:
+                    dict_level1[p].append(value)
             elif (indent + 1) == 2:
                 level_2 += 1
+                if p != -1:
+                    dict_level1[p].append(value)
             elif (indent + 1) == 3:
                 level_3 += 1
+                if p != -1:
+                    dict_level1[p].append(value)
             #print("LEVEL {}".format(indent+1))
+
 pretty(category_tree()[0])
-print(category_tree()[1])
-print("Level 1: {}".format(level_0))
-print("Level 2: {}".format(level_1))
-print("Level 3: {}".format(level_2))
-print("Level 4: {}".format(level_3))
+#print(category_tree()[0])
+#print(category_tree()[1])
+#print("Level 1: {}".format(level_0))
+#print("Level 2: {}".format(level_1))
+#print("Level 3: {}".format(level_2))
+#print("Level 4: {}".format(level_3))
+
+#print(list_level1)
+#print(len(list_level1))
 #print(category_tree())
+#print(dict_level1)
 
-'''
-def create_temporary_subset():
-    # exclude items that do not account for category
-    df_items_copy = df_items.copy()
-    df_events_copy = df_events.copy()
+def items_category_level_1():
+    pd.options.display.max_columns
+    df_items = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/bla/item_properties.csv')
+    df_events = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/bla/events.csv')
+    df_items.rename(columns={'timestamp': 'timestamp_2'}, inplace=True)
+    df_items = df_items[df_items['property'] == 'categoryid']
+    print(df_items.head(10))
+    i = 0
+    for index, row in df_items.iterrows():
+        cat = row['value']
+        for k, v in dict_level1.items():
+            if int(cat) in v:
+                substitute_cat = k
+                print(substitute_cat)
+                #row['value'] = substitute_cat
+                #row['value'] = substitute_cat
+                #df_items.at[index, row['value']] = substitute_cat
+                df_items.replace([row['value']], substitute_cat, inplace=True)
+        i += 1
+    print(df_items.head())
+    df_items.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/item_properties_modified.csv')
 
-    indexes_not_category = df_items_copy[df_items_copy['property'] != 'categoryid'].index  # get indexes of rows that do not have categoryid as property.
-    df_items_copy.drop(indexes_not_category, inplace=True)
+def df_final_creation():
+    df_events = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/bla/events.csv')
+    df_items = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/item_properties_modified.csv')
 
-    df_events_copy.sort_values(by=['timestamp'], inplace=True)
-    print("entrando no loop")
-    for index, row in df_events_copy.iterrows():
-        itemid = row['itemid']
-        print(itemid)
-        if itemid not in df_items_copy['itemid']:
-            print("%s...not in df_items" % itemid)
-            df_events_copy.drop(index, inplace=True)
-    print("chegou aqui")
-    df_events_copy.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/events_copy.csv')
-    print("done 1:)")
-    df_items_copy.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/items_copy.csv')
-    print("done 2:)")
-    return 0
+    df_final = df_events.merge(df_items, on=['itemid'])
+    df_final.drop(['timestamp_2', 'id'], axis=1, inplace=True)
+    df_final.sort_values(by=['timestamp'], inplace=True)
 
-'''
+    print(df_final.head())
+    #print("maximum cat: %s " % np.amax(df_final.value.astype(int)))
+    df_final.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items.csv')
+
+#df_final_creation()
