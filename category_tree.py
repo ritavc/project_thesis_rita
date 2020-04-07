@@ -314,18 +314,6 @@ def items_category_level_1():
                 df_items.replace([row['value']], substitute_cat, inplace=True)
         i += 1
     print(df_items.head())
-    df_items.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/item_properties_modified.csv')
+    df_items.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/item_properties_modified.csv', index=False)
 
-def df_final_creation():
-    df_events = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/bla/events.csv')
-    df_items = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/item_properties_modified.csv')
-
-    df_final = df_events.merge(df_items, on=['itemid'])
-    df_final.drop(['timestamp_2', 'id'], axis=1, inplace=True)
-    df_final.sort_values(by=['timestamp'], inplace=True)
-
-    print(df_final.head())
-    #print("maximum cat: %s " % np.amax(df_final.value.astype(int)))
-    df_final.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items.csv')
-
-#df_final_creation()
+#items_category_level_1()
