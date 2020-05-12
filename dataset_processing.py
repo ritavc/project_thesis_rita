@@ -284,12 +284,90 @@ def dataset_split_time():
     df_test.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_test.csv',
                    index=False)'''
 
+
+
+def timelag_sessions_division():
+    df_visitors = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_level1/joined_events_items_level1_longer_seqs.csv')
+    unique_visitors = df_visitors['visitorid'].unique()
+    times = []
+    for i in df_visitors['timestamp']:
+        times.append(datetime.datetime.fromtimestamp(i // 1000.0))
+    df_visitors['timestamp'] = times
+    min_diff_column = pd.Series([])
+    hour_diff_column = pd.Series([])
+    day_diff_column = pd.Series([])
+
+    counter = 0
+    indexes_to_remove = []
+    for current_visitor in unique_visitors:
+        print("NEW VISITOR................."+str(current_visitor))
+        session = 0
+        new_set = df_visitors.loc[(df_visitors.visitorid == current_visitor)]
+        indexes_new_set = list(new_set.index)
+        print(indexes_new_set)
+        print(new_set.shape[0]-1)
+        #if current_visitor == 854:
+         #   break
+        for i in range(new_set.shape[0]-1):
+
+            print("-----------------------")
+            print("i = "+str(i))
+            print("visitorid: "+str(new_set['visitorid'].iloc[i]))
+            print("category: "+str(new_set['value'].iloc[i]))
+            #print(new_set['value'])
+            print(new_set['timestamp'].iloc[i+1])
+            print(new_set['timestamp'].iloc[i])
+            minute_diff = (datetime.datetime.min + (new_set['timestamp'].iloc[i+1] - new_set['timestamp'].iloc[i])).time()
+            print(minute_diff.minute)
+            day_diff = (new_set['timestamp'].iloc[i+1] - new_set['timestamp'].iloc[i]).days
+            print(day_diff)
+            #print(day_diff)
+            '''if i == 0:
+                session = 0
+            elif minute_diff.minute > 1:
+                session += 1
+            elif minute_diff.minute == 1 and minute_diff.second > 1:
+                session += 1'''
+            if (minute_diff.minute == 0 or minute_diff.minute == 1) and (day_diff == 0):
+                if new_set['itemid'].iloc[i] == new_set['itemid'].iloc[i+1] and new_set['event'].iloc[i] == new_set['event'].iloc[i+1]:
+                    print("deleting in index ..."+str(indexes_new_set[i+1]))
+                    indexes_to_remove.append(indexes_new_set[i+1])
+
+
+
+            min_diff_column[counter] = minute_diff.minute
+            hour_diff_column[counter] = minute_diff.hour
+            day_diff_column[counter] = day_diff
+
+            '''print("day_diff_column[" + str(counter) + "] = "+str(day_diff_column[counter]))
+            print("hour_diff_column[" + str(counter) + "] = " + str(hour_diff_column[counter]))
+            print("minute_diff_column[" + str(counter) + "] = " + str(min_diff_column[counter]))
+            print(str(day_diff))'''
+            counter += 1
+        counter += 1
+        '''min_diff_column[counter-1] = 0
+        print("min_diff_column[new_set.shape[0]-1] = min_diff_column["+str(counter-1)+"]")
+        hour_diff_column[counter-1] = 0
+        day_diff_column[counter-1] = 0
+    df_visitors.insert(2, "day_diff", day_diff_column)
+    df_visitors.insert(3, "hour_diff", hour_diff_column)
+    df_visitors.insert(4, "min_diff", min_diff_column)
+    print(day_diff_column.head(20))
+    print(hour_diff_column.head(20))
+    print(min_diff_column.head(20))'''
+    df_visitors.drop(df_visitors.index[indexes_to_remove], inplace=True)
+    print(df_visitors.head(40))
+    df_visitors.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_level1/joined_events_sessions_1min.csv', index=False)
+
+
 ## experiments to split the dataset into train and test sets. division done by spliting a number of users to one side and others to the other side.
 #includes different division points.
 #includes simple statistical analysis to check how many short/long sequences result in each division performed.
 ## -> result: csv files 'joined_train' and 'joined_test'
 def dataset_split_users():
-    df_visitors = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items_longer_seqs.csv')
+    #df_visitors = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items_longer_seqs.csv')
+    df_visitors = pd.read_csv(
+        '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_level1/joined_events_sessions_1min.csv')
     df_visitors.sort_values(by=['visitorid'], inplace=True)
     #2890 users to one side, 1239 users to the other side. train with 2890 users.
     # X_train, X_test = X[:train_pct_index], X[train_pct_index:]
@@ -352,10 +430,10 @@ def dataset_split_users():
 
     ## guardar os diferentes datasets!
     df_train.sort_values(['visitorid', 'timestamp'], ascending=[True, True], inplace=True)
-    df_train.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_train.csv',
+    df_train.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_level1/joined_train.csv',
                     index=False)
     df_test.sort_values(['visitorid', 'timestamp'], ascending=[True, True], inplace=True)
-    df_test.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_test.csv',
+    df_test.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_level1/joined_test.csv',
                    index=False)
 
 #dataset_split_users()
@@ -367,7 +445,7 @@ def dataset_split_users():
 def prepare_dataset_seqs_target():
     scaler = MinMaxScaler(feature_range=(0, 1))
 
-    df_train = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_train.csv')
+    df_train = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_level1/joined_train.csv')
     #df_train['value'] = scaler.fit_transform(df_train[['value']])
 
     data_train = {'visitorid': [], 'cats_seq': [], 'next_cat': []}
@@ -390,10 +468,10 @@ def prepare_dataset_seqs_target():
     df_train_new = pd.DataFrame(data_train)
     print(df_train_new.head(20))
     #df_train_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_train_cat_scaling.csv', index=False)
-    df_train_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_train.csv',
+    df_train_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_level1/shifted_train.csv',
                         index=False)
 
-    df_test = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_test.csv')
+    df_test = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_level1/joined_test.csv')
     #df_test['value'] = scaler.fit_transform(df_test[['value']])
 
     data_test = {'visitorid': [], 'cats_seq': [], 'next_cat': []}
@@ -416,9 +494,10 @@ def prepare_dataset_seqs_target():
 
     print("max len seqs = "+str(max_len_cats_sequence))
     #df_test_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_test_cat_scaling.csv', index=False)
-    df_test_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_test.csv',
+    df_test_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_level1/shifted_test.csv',
                        index=False)
-
+prepare_dataset_seqs_target()
+#timelag_sessions_division()
 #prepare_dataset_seqs_target()
 #dataset_split_users()
 #dataset_split_time()
