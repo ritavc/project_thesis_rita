@@ -271,28 +271,36 @@ def pretty(d, indent=0, parent_1=-1, parent_2=-1):
                 if parent_1 != -1:
                     dict_level1[parent_1].append(value)
 
+pretty(category_tree()[0])
+#print(dict_level1)
 def items_category_level_1():
     pd.options.display.max_columns
     df_final = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items.csv')
-
-    i = 0
+    flatten_values_l1 = []  # to make search easier
+    level_1_values = list(dict_level1.values())
+    level_1_keys = list(dict_level1.keys())
+    for l in level_1_values:
+        flatten_values_l1.extend(l)
     for index, row in df_final.iterrows():
         cat = row['value']
-        for k, v in dict_level1.items():
-            if int(cat) in v:
-                substitute_cat = k
-                print(substitute_cat)
-                #row['value'] = substitute_cat
-                #row['value'] = substitute_cat
-                #df_items.at[index, row['value']] = substitute_cat
-                df_final.replace([row['value']], substitute_cat, inplace=True)
-        i += 1
+        #for k, v in dict_level1.items():
+        if int(cat) in flatten_values_l1:
+            index_value_cat = 0
+            for l in level_1_values:
+                if int(cat) in l:
+                    substitute_cat = level_1_keys[index_value_cat]#k
+                    print(substitute_cat)
+                        #row['value'] = substitute_cat
+                        #row['value'] = substitute_cat
+                        #df_items.at[index, row['value']] = substitute_cat
+                    df_final.replace([row['value']], substitute_cat, inplace=True)
+                index_value_cat += 1
     print(df_final.head())
     df_final.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_level1/joined_events_items_level1.csv', index=False)
 
-items_category_level_1()
+#items_category_level_1()
 
-#pretty(category_tree()[0])
+
 #print(category_tree()[0])
 #print(category_tree()[1])
 #print("Level 1: {}".format(level_0))
@@ -307,12 +315,11 @@ items_category_level_1()
 #list_keys_sorted = list(dict_level1.keys())
 #print(sorted(list_keys_sorted))
 
-new_dict = category_tree()[0]
-#print(new_dict)
 
 
 ## to replace categoryid values in dataset by their parent category from level 2 or 1.
 def items_category_level_1_2():
+    new_dict = category_tree()[0]
     values_level_1 = list(new_dict.values())
     i = 0
     values_level_1_2 = []
@@ -573,4 +580,4 @@ def prepare_dataset_seqs_target_cats_level1():
     df_test_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_level1/shifted_test_cats_level1.csv',
                        index=False)
 
-prepare_dataset_seqs_target_cats_level1()
+#prepare_dataset_seqs_target_cats_level1()
