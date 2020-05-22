@@ -5,7 +5,8 @@ import sys
 import numpy as np
 import pandas as pd
 from keras.layers import Dense
-from keras.layers import LSTM
+from keras.layers import GRU
+from keras.layers import Dropout
 from keras.layers import Masking
 from keras.models import Sequential
 from numpy import array
@@ -15,7 +16,7 @@ stderr = sys.stderr
 sys.stderr = open(os.devnull, 'w')
 sys.stderr = stderr
 
-def lstm_model_categorical_data():
+def gru_model_categorical_data():
     df_visitors_no_split = pd.read_csv(
         '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_level1/joined_events_sessions_1min.csv')
     df_visitors = pd.read_csv(
@@ -114,16 +115,16 @@ def lstm_model_categorical_data():
     X_test = X_test.reshape(samples_test, max_len, categories)
     y_test = array(output_encoded_test)
 
-    dropout = 0.4
     model = Sequential()
     model.add(Masking(mask_value=-1, input_shape=(max_len, categories)))
-    model.add(LSTM(units, input_shape=(max_len, categories), dropout= dropout, return_sequences=False))  # units-> random number. trial and error methodology.
+    model.add(GRU(units, input_shape=(max_len, categories), return_sequences=False))  # units-> random number. trial and error methodology.
+    model.add(Dropout(rate=0.2))
     model.add(Dense(categories, activation='softmax'))
     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['acc'])
     print(model.summary())
 
     # fit the model
-    model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=2, verbose=0)
+    model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=50, verbose=0)
     # evaluate the model
     loss_train, accuracy_train = model.evaluate(X_train, y_train, verbose=0)
     print('Accuracy train: %f' % (accuracy_train * 100))
@@ -146,22 +147,4 @@ def lstm_model_categorical_data():
     print('Expected: %s' % y_test_new)
     print('Predicted: %s' % one_hot_decode(y_predicted))
 
-lstm_model_categorical_data()
-
-
-''' BATCH SIZE
-# fit an LSTM network to training data
-def fit_lstm(train, n_batch, nb_epoch, n_neurons):
-	X, y = train[:, 0:-1], train[:, -1]
-	X = X.reshape(X.shape[0], 1, X.shape[1])
-	model = Sequential()
-	model.add(LSTM(n_neurons, batch_input_shape=(n_batch, X.shape[1], X.shape[2]), stateful=True))
-	model.add(Dense(1))
-	model.compile(loss='mean_squared_error', optimizer='adam')
-	for i in range(nb_epoch):
-		model.fit(X, y, epochs=1, batch_size=n_batch, verbose=0, shuffle=False)
-		model.reset_states()
-	return model
-
-
-'''
+gru_model_categorical_data()

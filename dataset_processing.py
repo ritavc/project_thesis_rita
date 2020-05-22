@@ -448,22 +448,29 @@ def prepare_dataset_seqs_target():
     df_train = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_level1/joined_train.csv')
     #df_train['value'] = scaler.fit_transform(df_train[['value']])
 
-    data_train = {'visitorid': [], 'cats_seq': [], 'next_cat': []}
+    df_train["event"] = df_train["event"].astype('category')
+    df_train["event_cat"] = df_train["event"].cat.codes
+
+    data_train = {'visitorid': [], 'cats_seq': [], 'events_seq': [], 'next_cat': []}
     #for index, row in df_train.iterrows():
     unique_visitors_train = df_train['visitorid'].unique()
     max_len_cats_sequence = 0
     for current_visitor_train in unique_visitors_train:
-        X = []
+        X_cat = []
+        X_event = []
         new_set = df_train.loc[(df_train.visitorid == current_visitor_train)]
         data_train['visitorid'].append(current_visitor_train)
         for cat in new_set['value']:
             #X.append(float(cat))
-            X.append(int(cat))
-        real_next_cat = X.pop()
+            X_cat.append(int(cat))
+        for event in new_set['event_cat']:
+            X_event.append(int(event))
+        real_next_cat = X_cat.pop()
         data_train['next_cat'].append(real_next_cat)
-        if len(X) > max_len_cats_sequence:
-            max_len_cats_sequence = len(X)
-        data_train['cats_seq'].append(X)
+        if len(X_cat) > max_len_cats_sequence:
+            max_len_cats_sequence = len(X_cat)
+        data_train['cats_seq'].append(X_cat)
+        data_train['events_seq'].append(X_event)
     #print(data_train)
     df_train_new = pd.DataFrame(data_train)
     print(df_train_new.head(20))
@@ -474,20 +481,27 @@ def prepare_dataset_seqs_target():
     df_test = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_level1/joined_test.csv')
     #df_test['value'] = scaler.fit_transform(df_test[['value']])
 
-    data_test = {'visitorid': [], 'cats_seq': [], 'next_cat': []}
+    df_test["event"] = df_train["event"].astype('category')
+    df_test["event_cat"] = df_train["event"].cat.codes
+
+    data_test = {'visitorid': [], 'cats_seq': [], 'events_seq': [], 'next_cat': []}
     unique_visitors_test = df_test['visitorid'].unique()
     for current_visitor_test in unique_visitors_test:
-        X = []
+        X_cat = []
+        X_event = []
         new_set = df_test.loc[(df_test.visitorid == current_visitor_test)]
         data_test['visitorid'].append(current_visitor_test)
         for cat in new_set['value']:
             #X.append(float(cat))
-            X.append(int(cat))
-        real_next_cat = X.pop()
+            X_cat.append(int(cat))
+        for event in new_set['event_cat']:
+            X_event.append(int(event))
+        real_next_cat = X_cat.pop()
         data_test['next_cat'].append(real_next_cat)
-        if len(X) > max_len_cats_sequence:
-            max_len_cats_sequence = len(X)
-        data_test['cats_seq'].append(X)
+        if len(X_cat) > max_len_cats_sequence:
+            max_len_cats_sequence = len(X_cat)
+        data_test['cats_seq'].append(X_cat)
+        data_test['events_seq'].append(X_event)
     #print(data_test)
     df_test_new = pd.DataFrame(data_test)
     print(df_test_new.head(20))

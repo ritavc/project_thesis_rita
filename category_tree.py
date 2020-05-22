@@ -1,9 +1,6 @@
-import pandas as pd
-from collections import defaultdict
 import numpy as np
+import pandas as pd
 import seaborn as sns
-
-from anytree.exporter import DotExporter
 
 df_cat = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_tree.csv')
 
