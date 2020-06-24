@@ -25,218 +25,6 @@ class LossHistory(keras.callbacks.Callback):
     def on_batch_end(self, batch, logs={}):
         self.losses.append(logs.get('loss'))
 
-# two independent lstm layers
-def lstm_model_categorical_data_stacked():
-    df_visitors_no_split = pd.read_csv(
-        '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_longer_seqs.csv')
-    unique_cats_level1 = list(df_visitors_no_split['level1'].unique())
-    unique_cats_level1.sort()
-    print(unique_cats_level1)
-    print("Distinct nr of categories level1: %s" % (len(unique_cats_level1)))
-    unique_cats_level2 = list(df_visitors_no_split['level2'].unique())
-    unique_cats_level2.sort()
-    print(unique_cats_level2)
-    print("Distinct nr of categories level2: %s" % (len(unique_cats_level2)))
-
-    df_train = pd.read_csv(
-        '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_train_set.csv')
-    df_validation = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_val_set.csv')
-
-    #############
-    train_pct_index = int(0.40 * len(df_train))
-    df_train, df_discard_train = df_train[:train_pct_index], df_train[train_pct_index:]
-    test_pct_index = int(0.20 * len(df_validation))
-    df_validation, df_discard_test = df_validation[:test_pct_index], df_validation[test_pct_index:]
-    # ----
-    df_train['sequence_cats_level1'] = [ast.literal_eval(cat_list_string) for cat_list_string in
-                                        df_train['sequence_cats_level1']]
-    df_validation['sequence_cats_level1'] = [ast.literal_eval(cat_list_string) for cat_list_string in
-                                             df_validation['sequence_cats_level1']]
-    df_train['sequence_cats_level2'] = [ast.literal_eval(cat_list_string) for cat_list_string in
-                                        df_train['sequence_cats_level2']]
-    df_validation['sequence_cats_level2'] = [ast.literal_eval(cat_list_string) for cat_list_string in
-                                             df_validation['sequence_cats_level2']]
-    df_train['sequence_events'] = [ast.literal_eval(event_list_string) for event_list_string in
-                                   df_train['sequence_events']]
-    df_validation['sequence_events'] = [ast.literal_eval(event_list_string) for event_list_string in
-                                        df_validation['sequence_events']]
-
-    ############
-
-    # one hot encode sequence
-    def one_hot_encode(sequence, n_features, length, unique_cats):
-        encoding = []
-        i = 0
-        for value in sequence:
-            vector = [0 for _ in range(n_features)]
-            vector[unique_cats.index(value)] = 1
-            encoding.append(vector)
-            i += 1
-        if i < length:  # -1 as a value chosen to ignore (mask) positions in the sequence with no values
-            for j in range(length - i):
-                encoding.append([-1 for _ in range(n_features)])
-        return encoding
-
-    # one hot encode sequence
-    def one_hot_encode_target(value, n_features, unique_cats):
-        vector = [0 for _ in range(n_features)]
-        vector[unique_cats.index(value)] = 1
-        return vector
-
-    # decode a one hot encoded string
-    def one_hot_decode(encoded_seq, unique_cats):
-        decoded_seq = []
-        # returns index of highest probability value in array.
-        for vector in encoded_seq:
-            highest_value_index = np.argmax(vector)
-            if vector[0] != -1:
-                decoded_seq.append(unique_cats[highest_value_index])
-        return decoded_seq
-
-    def one_hot_decode_target(encoded_prediction, unique_cats):
-        value = unique_cats[encoded_prediction.index(1)]
-        return value
-
-    X_train_level1 = df_train['sequence_cats_level1']
-    y_train_level1 = df_train['next_cat_level1']
-    X_train_level2 = df_train['sequence_cats_level2']
-    y_train_level2 = df_train['next_cat_level2']
-    X_val_level1 = df_validation['sequence_cats_level1']
-    y_val_level1 = df_validation['next_cat_level1']
-    X_val_level2 = df_validation['sequence_cats_level2']
-    y_val_level2 = df_validation['next_cat_level2']
-
-    categories_level1 = len(unique_cats_level1)
-    categories_level2 = len(unique_cats_level2)
-    events_unique = 3
-    timesteps = 0
-    units = 25
-    samples = X_train_level1.shape[0]
-
-    for seq in X_train_level1:
-        if len(seq) > timesteps:
-            timesteps = len(seq)
-
-    samples_val = X_val_level1.shape[0]
-    for seq in X_val_level1:
-        if len(seq) > timesteps:
-            timesteps = len(seq)
-
-    print("max len:")
-    print(timesteps)  # same for level1 and level2 obviously.
-
-    input_encoded_train_level1 = []
-    output_encoded_train_level1 = []
-    for x in range(len(X_train_level1)):
-        input_encoded_seq_train_level1 = one_hot_encode(X_train_level1[x], categories_level1, timesteps,
-                                                        unique_cats_level1)
-        input_encoded_train_level1.append(input_encoded_seq_train_level1)
-        output_encoded_train_level1.append(
-            one_hot_encode_target(y_train_level1[x], categories_level1, unique_cats_level1))
-
-    input_encoded_val_level1 = []
-    output_encoded_val_level1 = []
-    for z in range(len(X_val_level1)):
-        input_encoded_seq_test_level1 = one_hot_encode(X_val_level1[z], categories_level1, timesteps,
-                                                       unique_cats_level1)
-        input_encoded_val_level1.append(input_encoded_seq_test_level1)
-        output_encoded_val_level1.append(one_hot_encode_target(y_val_level1[z], categories_level1, unique_cats_level1))
-
-    input_encoded_train_level2 = []
-    output_encoded_train_level2 = []
-    for x in range(len(X_train_level2)):
-        input_encoded_seq_train_level2 = one_hot_encode(X_train_level2[x], categories_level2, timesteps,
-                                                        unique_cats_level2)
-        input_encoded_train_level2.append(input_encoded_seq_train_level2)
-        output_encoded_train_level2.append(
-            one_hot_encode_target(y_train_level2[x], categories_level2, unique_cats_level2))
-
-    input_encoded_val_level2 = []
-    output_encoded_val_level2 = []
-    for z in range(len(X_val_level2)):
-        input_encoded_seq_test_level2 = one_hot_encode(X_val_level2[z], categories_level2, timesteps,
-                                                       unique_cats_level2)
-        input_encoded_val_level2.append(input_encoded_seq_test_level2)
-        output_encoded_val_level2.append(one_hot_encode_target(y_val_level2[z], categories_level2, unique_cats_level2))
-
-    X_train_level1 = array(input_encoded_train_level1)
-    X_train_level1 = X_train_level1.reshape(samples, timesteps, categories_level1)
-    y_train_level1 = array(output_encoded_train_level1)
-
-    X_val_level1 = array(input_encoded_val_level1)
-    X_val_level1 = X_val_level1.reshape(samples_val, timesteps, categories_level1)
-    y_val_level1 = array(output_encoded_val_level1)
-
-    X_train_level2 = array(input_encoded_train_level2)
-    X_train_level2 = X_train_level2.reshape(samples, timesteps, categories_level2)
-    y_train_level2 = array(output_encoded_train_level2)
-
-    X_val_level2 = array(input_encoded_val_level2)
-    X_val_level2 = X_val_level2.reshape(samples_val, timesteps, categories_level2)
-    y_val_level2 = array(output_encoded_val_level2)
-
-    input_level1 = Input(shape=(timesteps, categories_level1), name='input_level1')
-    input_level2 = Input(shape=(timesteps, categories_level2), name='input_level2')
-    masked_input_level1 = Masking(mask_value=-1)(input_level1)
-    masked_input_level2 = Masking(mask_value=-1)(input_level2)
-    # concatenation = Concatenate([masked_input_level1, masked_input_level2])
-    lstm_layer1 = LSTM(units, return_sequences=False)(masked_input_level1)
-    lstm_layer2 = LSTM(units, return_sequences=False)(masked_input_level2)
-    dense_level1 = Dense(categories_level1, activation='softmax', name='dense_level1')(lstm_layer1)
-    dense_level2 = Dense(categories_level2, activation='softmax', name='dense_level2')(lstm_layer2)
-
-    model = Model([input_level1, input_level2], [dense_level1, dense_level2])
-    model.compile(loss={'dense_level1': 'categorical_crossentropy', 'dense_level2': 'categorical_crossentropy'},
-                  optimizer='adam', metrics=['acc'])
-    print(model.summary())
-    # fit the model
-    model.fit([X_train_level1, X_train_level2], [y_train_level1, y_train_level2],
-              validation_data=([X_val_level1, X_val_level2], [y_val_level1, y_val_level2]),
-              epochs=20, verbose=0)
-    ### ---> ERRO AQUI
-    loss_train1, loss_train2, accuracy_train1, accuracy_train2 = model.evaluate([X_train_level1, X_train_level2],
-                                                                                [y_train_level1, y_train_level2],
-                                                                                verbose=0)
-    print('Accuracy train level1: %f' % (accuracy_train1 * 100))
-    loss_val, accuracy_val = model.evaluate([X_val_level1, X_val_level2], [y_val_level1, y_val_level2], verbose=0)
-    print('Accuracy val level1: %f' % (accuracy_val * 100))
-    '''
-    dropout = 0.4
-    model = Sequential()
-    model.add(Masking(mask_value=-1, input_shape=(timesteps, categories_level1)))
-    model.add(LSTM(units, input_shape=(timesteps, categories_level1), dropout=dropout, return_sequences=False))  # units-> random number. trial and error methodology.
-    model.add(Dense(categories_level1, activation='softmax'))
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['acc'])
-    print(model.summary())
-
-    # fit the model
-    model.fit(X_train_level1, y_train_level1, validation_data=(X_val_level1, y_val_level1), epochs=20, verbose=0)
-    # evaluate the model
-    loss_train, accuracy_train = model.evaluate(X_train_level1, y_train_level1, verbose=0)
-    print('Accuracy train: %f' % (accuracy_train * 100))
-    loss_val, accuracy_val = model.evaluate(X_val_level1, y_val_level1, verbose=0)
-    print('Accuracy val: %f' % (accuracy_val * 100))
-
-    
-    # prediction on a SINGLE new data sequence. experiment
-    sequence_val = [250, 250, 140, 1224, 140, 140, 140, 140, 140, 250]
-    X_val_new = []
-    input_encoded_seq_ = one_hot_encode(sequence_val, categories_level1, timesteps, unique_cats_level1)
-    X_val_new.append(input_encoded_seq_)
-    X_val_new = array(X_val_new)
-    #print(X_test_new)
-    #print(X_test_new.shape)
-    y_val_new = 1698
-    y_predicted = model.predict(X_val_new)
-
-    print('Sequence: %s' % [one_hot_decode(x, unique_cats_level1) for x in X_val_new])
-    print('Expected: %s' % y_val_new)
-    print('Predicted: %s' % one_hot_decode(y_predicted, unique_cats_level1))
-    '''
-
-
-# lstm_model_categorical_data_stacked()
-
 def lstm_model_categorical_data_concat():
     df_visitors_no_split = pd.read_csv(
         '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_longer_seqs.csv')
@@ -293,19 +81,6 @@ def lstm_model_categorical_data_concat():
         value = unique_cats[encoded_prediction.index(1)]
         return value
 
-    def _to_tensor(x, dtype):
-        """Convert the input `x` to a tensor of type `dtype`.
-        # Arguments
-            x: An object to be converted (numpy array, list, tensors).
-            dtype: The destination type.
-        # Returns
-            A tensor.
-        """
-        x = tf.convert_to_tensor(x)
-        if x.dtype != dtype:
-            x = tf.cast(x, dtype)
-        return x
-
     """def loss(target, output, from_logits=False, axis=-1):
         Categorical crossentropy between an output tensor and a target tensor.
             # Arguments
@@ -335,7 +110,7 @@ def lstm_model_categorical_data_concat():
                                                            logits=output)
         """
 
-    # Create loss function
+    # custom loss function
     def loss(y_true, y_pred):
         # y_true_array = y_true.eval(session=tf.compat.v1.Session())
         #cannot use eval inside loss function...
@@ -400,10 +175,6 @@ def lstm_model_categorical_data_concat():
         output_encoded_train.append((one_hot_encode(next_cat1, categories_level1, unique_cats_level1) +
                                      one_hot_encode(next_cat2, categories_level2, unique_cats_level2)))
         input_encoded_train.append(one_sequence_encoding_input)
-        # print("input_encoded_train")
-        # print(input_encoded_train)
-        # print("output_encoded_train")
-        # print(output_encoded_train)
 
     input_encoded_val = []
     output_encoded_val = []
@@ -431,7 +202,6 @@ def lstm_model_categorical_data_concat():
     X_val = array(input_encoded_val)
     X_val = X_val.reshape(samples_val, timesteps, (categories_level1 + categories_level2))
     y_val = array(output_encoded_val)
-    print(X_val.shape)
 
     dropout = 0.4
     model = Sequential()
@@ -454,7 +224,7 @@ def lstm_model_categorical_data_concat():
     print(len(history.losses))
 
 
-    # prediction on a SINGLE new data sequence. experiment
+    ######## test on a new sample. prediction on a SINGLE new data sequence. experiment
     sequence_test_level1 = [140, 140, 140, 140, 140, 859, 653, 1490, 1490, 653]
     sequence_test_level2 = [1519, 1519, 384, 384, 1519, 1473, 312, 145, 798, 92]
     encoded_test_seq_input = []
