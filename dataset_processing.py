@@ -189,8 +189,13 @@ def assign_corresponding_tree_cat_levels():
         cats_level5.append(category_level5)
         cats_level6.append(category_level6)
 
+
     df['level1'], df['level2'], df['level3'], df['level4'], df['level5'], df['level6'] = cats_level1, cats_level2, cats_level3, cats_level4, cats_level5, cats_level6
-    df.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items_cat_levels.csv', index=False)
+    unique_level1 = df['level1'].unique()
+    print("Distinct nr of categories level1: %s" % (unique_level1.shape,))
+    unique_level2 = df['level2'].unique()
+    print("Distinct nr of categories level2: %s" % (unique_level2.shape,))
+    #df.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items_cat_levels.csv', index=False)
 
 #assign_corresponding_tree_cat_levels()
 
@@ -263,7 +268,7 @@ def group_sessions():
 
 ## simple statistical analysis of the newly created dataset 'joined_events_items_longer_seqs'
 def experiments_groupings_cats():
-    df_visitors = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_level1/joined_events_items_level1_longer_seqs.csv')
+    df_visitors = pd.read_csv('')
     groups = df_visitors.groupby('visitorid')
     print("Nr of instances in dataset: %s" % (df_visitors.shape,))
     #print(groups.size().value_counts().head(60))
@@ -278,7 +283,7 @@ def experiments_groupings_cats():
 ## experiments to split the dataset into train and test sets. division done by spliting a number of users to one side and others to the other side.
 #includes different division points.
 #includes simple statistical analysis to check how many short/long sequences result in each division performed.
-## -> result: csv files 'joined_train' and 'joined_test'
+## -> result: csv files 'train_seqs_set' and 'val_seqs_set'
 def dataset_split_by_users():
     df_visitors = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_longer_seqs.csv')
 
@@ -287,128 +292,161 @@ def dataset_split_by_users():
     # X_train, X_test = X[:train_pct_index], X[train_pct_index:]
     # y_train, y_test = y[:train_pct_index], y[train_pct_index:]
     unique_visitors = df_visitors['visitorid'].unique()
-    train_pct_index = int(0.60 * len(unique_visitors))
-    unique_train, unique_test = unique_visitors[:train_pct_index], unique_visitors[train_pct_index:]
+    train_val_division_index = int(0.60 * len(unique_visitors))
+    unique_train, unique_val_temp = unique_visitors[:train_val_division_index], unique_visitors[train_val_division_index:]
+    val_test_division_index = int(0.85 * len(unique_val_temp))
+    unique_val, unique_test = unique_val_temp[:val_test_division_index], unique_val_temp[val_test_division_index:]
+
     df_train = df_visitors[df_visitors['visitorid'].isin(unique_train)]
+    df_val = df_visitors[df_visitors['visitorid'].isin(unique_val)]
     df_test = df_visitors[df_visitors['visitorid'].isin(unique_test)]
     print("Nr of instances in dataset train : %s" % (df_train.shape,))
-
+    print("Nr of instances in dataset validation: %s" % (df_val.shape,))
     print("Nr of instances in dataset test: %s" % (df_test.shape,))
 
+
     categories_train = df_train['value'].unique()
-    print("Distinct nr of categories: %s" % (categories_train.shape,))
+    print("Distinct nr of categories in train: %s" % (categories_train.shape,))
     users_train = df_train['visitorid'].unique()
-    print("Distinct nr of users train : %s" % (users_train.shape,))
+    print("Distinct nr of users in train : %s" % (users_train.shape,))
+    categories_val = df_val['value'].unique()
+    print("Distinct nr of categories in val: %s" % (categories_val.shape,))
+    users_val = df_val['visitorid'].unique()
+    print("Distinct nr of users in val: %s" % (users_val.shape,))
     categories_test = df_test['value'].unique()
-    print("Distinct nr of categories: %s" % (categories_test.shape,))
+    print("Distinct nr of categories in test: %s" % (categories_test.shape,))
     users_test = df_test['visitorid'].unique()
-    print("Distinct nr of users test : %s" % (users_test.shape,))
-
-    groups_train = df_train.sort_values(['visitorid'], ascending=True).groupby('visitorid')
-    groups_size_train = groups_train.size()
-    print("groups train: ")
-    print(groups_size_train)
-    bigger_train = 0
-    smaller_train = 0
-    list_long_train_unique = []
-    for i, row in groups_size_train.iteritems():
-        if int(row) > 3:
-            bigger_train += 1
-            list_long_train_unique.append(i)
-        else:
-            smaller_train += 1
-        # print(i, row)
-
-    print("number of smaller seqs in train : {}".format(smaller_train))
-    print("number of bigger seqs in train : {}".format(bigger_train))
+    print("Distinct nr of users in test: %s" % (users_test.shape,))
 
     groups_test = df_test.sort_values(['visitorid'], ascending=True).groupby('visitorid')
     groups_size_test = groups_test.size()
     print("groups test: ")
     print(groups_size_test)
-    bigger_test = 0
-    smaller_test = 0
-    list_long_test = []
-    list_small_test = []
+    larger_seqs_test = 0 #sequences of more than 10 events
     for i, row in groups_size_test.iteritems():
-        if int(row) > 3:
-            bigger_test += 1
-            list_long_test.append(i)
-        else:
-            smaller_test += 1
-            list_small_test.append(i)
-
-        # print(i, row)
-    print("number of smaller seqs in test : {}".format(smaller_test))
-    print("number of bigger seqs in test : {}".format(bigger_test))
+        if int(row) > 10:
+            larger_seqs_test += 1
+    print("number of larger sequences in test: "+str(larger_seqs_test))
 
     df_train.sort_values(['visitorid', 'timestamp'], ascending=[True, True], inplace=True)
-    df_train.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/train_seqs_set.csv', index=False)
+    df_train.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/train_set.csv', index=False)
+
+    df_val.sort_values(['visitorid', 'timestamp'], ascending=[True, True], inplace=True)
+    df_val.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/validation_set.csv', index=False)
 
     df_test.sort_values(['visitorid', 'timestamp'], ascending=[True, True], inplace=True)
-    df_test.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/test_seqs_set.csv', index=False)
+    df_test.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/test_set.csv', index=False)
 
-dataset_split_by_users()
-
-
-
-
+#dataset_split_by_users()
 
 
 ## function to shift the dataset in order to be in the form: per row, X sequence of categories (taken from each event) and y next real category
 ## -> result: csv files 'shifted_train' and 'shifted_test'
-## includes, a minmaxscaling of the categories as well, and this experiment is saved in csv files 'shifted_train_cat_scaling' and 'shifted_test_cat_scaling'
 def prepare_dataset_seqs_target():
-    df_train = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_level1/joined_train_level1.csv')
-    #df_train['value'] = scaler.fit_transform(df_train[['value']])
+    df_train = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/train_set.csv')
+    df_train['event'] = df_train['event'].astype('category')
+    df_train['event'] = df_train['event'].cat.codes
 
-    data_train = {'visitorid': [], 'cats_seq': [], 'next_cat': []}
-    #for index, row in df_train.iterrows():
+    data_train = {'visitorid': [], 'sequence_events': [], 'sequence_cats_level1': [], 'next_cat_level1': [], 'sequence_cats_level2': [], 'next_cat_level2': []}
     unique_visitors_train = df_train['visitorid'].unique()
     max_len_cats_sequence = 0
     for current_visitor_train in unique_visitors_train:
-        X = []
-        new_set = df_train.loc[(df_train.visitorid == current_visitor_train)]
+        cats_level1_train = []
+        cats_level2_train = []
+        events_train = []
+        new_set_train = df_train.loc[(df_train.visitorid == current_visitor_train)]
         data_train['visitorid'].append(current_visitor_train)
-        for cat in new_set['value']:
+        for index, elem in new_set_train.iterrows():
             #X.append(float(cat))
-            X.append(int(cat))
-        real_next_cat = X.pop()
-        data_train['next_cat'].append(real_next_cat)
-        if len(X) > max_len_cats_sequence:
-            max_len_cats_sequence = len(X)
-        data_train['cats_seq'].append(X)
+            cats_level1_train.append(int(elem['level1']))
+            cats_level2_train.append(int(elem['level2']))
+            events_train.append(int(elem['event']))
+        real_next_cat_level1 = cats_level1_train.pop()
+        data_train['next_cat_level1'].append(real_next_cat_level1)
+        real_next_cat_level2 = cats_level2_train.pop()
+        data_train['next_cat_level2'].append(real_next_cat_level2)
+        #--statistics. max length of sequence.
+        if len(cats_level1_train) > max_len_cats_sequence:
+            max_len_cats_sequence = len(cats_level1_train)
+        #--
+        data_train['sequence_cats_level1'].append(cats_level1_train)
+        data_train['sequence_cats_level2'].append(cats_level2_train)
+        data_train['sequence_events'].append(events_train)
     #print(data_train)
+    print("max_len_cats_sequence_train = "+str(max_len_cats_sequence))
     df_train_new = pd.DataFrame(data_train)
     print(df_train_new.head(20))
-    #df_train_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_train_cat_scaling.csv', index=False)
-    df_train_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_level1/shifted_train_cats_level1.csv',
+    df_train_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_train_set.csv',
                         index=False)
 
-    df_test = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_level1/joined_test_level1.csv')
-    #df_test['value'] = scaler.fit_transform(df_test[['value']])
 
-    data_test = {'visitorid': [], 'cats_seq': [], 'next_cat': []}
+    df_val = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/validation_set.csv')
+    df_val['event'] = df_val['event'].astype('category')
+    df_val['event'] = df_val['event'].cat.codes
+    data_val = {'visitorid': [], 'sequence_events': [], 'sequence_cats_level1': [], 'next_cat_level1': [], 'sequence_cats_level2': [],
+                  'next_cat_level2': []}
+    unique_visitors_val = df_val['visitorid'].unique()
+    max_len_cats_sequence_val = 0
+    for current_visitor_val in unique_visitors_val:
+        cats_level1_val = []
+        cats_level2_val = []
+        events_val = []
+        new_set_val = df_val.loc[(df_val.visitorid == current_visitor_val)]
+        data_val['visitorid'].append(current_visitor_val)
+        for index, elem in new_set_val.iterrows():
+            cats_level1_val.append(int(elem['level1']))
+            cats_level2_val.append(int(elem['level2']))
+            events_val.append(int(elem['event']))
+        real_next_cat_level1 = cats_level1_val.pop()
+        data_val['next_cat_level1'].append(real_next_cat_level1)
+        real_next_cat_level2 = cats_level2_val.pop()
+        data_val['next_cat_level2'].append(real_next_cat_level2)
+        # --statistics. max length of sequence.
+        if len(cats_level1_val) > max_len_cats_sequence_val:
+            max_len_cats_sequence_val = len(cats_level1_val)
+        # --
+        data_val['sequence_cats_level1'].append(cats_level1_val)
+        data_val['sequence_cats_level2'].append(cats_level2_val)
+        data_val['sequence_events'].append(events_val)
+    print("max_len_cats_sequence_val = "+str(max_len_cats_sequence_val))
+    df_val_new = pd.DataFrame(data_val)
+    print(df_val_new.head(20))
+    df_val_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_val_set.csv',
+                        index=False)
+
+
+    df_test = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/test_set.csv')
+    df_test['event'] = df_test['event'].astype('category')
+    df_test['event'] = df_test['event'].cat.codes
+    data_test = {'visitorid': [], 'sequence_events': [], 'sequence_cats_level1': [], 'next_cat_level1': [], 'sequence_cats_level2': [],
+                  'next_cat_level2': []}
     unique_visitors_test = df_test['visitorid'].unique()
+    max_len_cats_sequence_test = 0
     for current_visitor_test in unique_visitors_test:
-        X = []
-        new_set = df_test.loc[(df_test.visitorid == current_visitor_test)]
+        cats_level1_test = []
+        cats_level2_test = []
+        events_test = []
+        new_set_test = df_test.loc[(df_test.visitorid == current_visitor_test)]
         data_test['visitorid'].append(current_visitor_test)
-        for cat in new_set['value']:
-            #X.append(float(cat))
-            X.append(int(cat))
-        real_next_cat = X.pop()
-        data_test['next_cat'].append(real_next_cat)
-        if len(X) > max_len_cats_sequence:
-            max_len_cats_sequence = len(X)
-        data_test['cats_seq'].append(X)
-    #print(data_test)
+        for index, elem in new_set_test.iterrows():
+            cats_level1_test.append(int(elem['level1']))
+            cats_level2_test.append(int(elem['level2']))
+            events_test.append(int(elem['event']))
+        real_next_cat_level1 = cats_level1_test.pop()
+        data_test['next_cat_level1'].append(real_next_cat_level1)
+        real_next_cat_level2 = cats_level2_test.pop()
+        data_test['next_cat_level2'].append(real_next_cat_level2)
+        # --statistics. max length of sequence.
+        if len(cats_level1_test) > max_len_cats_sequence_test:
+            max_len_cats_sequence_test = len(cats_level1_test)
+        # --
+        data_test['sequence_cats_level1'].append(cats_level1_test)
+        data_test['sequence_cats_level2'].append(cats_level2_test)
+        data_test['sequence_events'].append(events_test)
+    print("max_len_cats_sequence_test = "+str(max_len_cats_sequence_test))
     df_test_new = pd.DataFrame(data_test)
     print(df_test_new.head(20))
-
-    print("max len seqs = "+str(max_len_cats_sequence))
-    #df_test_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_test_cat_scaling.csv', index=False)
-    df_test_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_level1/shifted_test_cats_level1.csv',
+    df_test_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_test_set.csv',
                        index=False)
 
-#prepare_dataset_seqs_target_cats_level1()
+prepare_dataset_seqs_target()
