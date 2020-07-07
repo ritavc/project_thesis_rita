@@ -22,7 +22,10 @@ def item_properties_concat():
 ## simple statistical analysis of the events dataset
 def statistical_analysis_events():
     df_events = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/events.csv')
-
+    times = []
+    for i in df_events['timestamp']:
+        times.append(datetime.datetime.fromtimestamp(i // 1000.0))
+    df_events['timestamp'] = times
     # print(df_events['event'].value_counts())
     print("Nr of instances in events dataset: %s "%(df_events.shape,))
     df_events.sort_values(by=['timestamp'], inplace=True)
@@ -32,6 +35,10 @@ def statistical_analysis_events():
     print('Total sessions/visitors: ', df_events['visitorid'].size)
     print(df_events['event'].value_counts())
     print(df_events.loc[(df_events.itemid == 218)].sort_values('timestamp').head(30))
+    print("first element time:")
+    print(df_events['timestamp'].iloc[0]) # first element
+    print("last element time:")
+    print(df_events['timestamp'].iloc[-1])  # last element
 
 ## simple statistical analysis of the items dataset AND filtering of the items that have as 'property' == 'categoryid' (the value to be predicted in this problem.)
 #-> result: csv file 'items_properties_categories'
@@ -292,5 +299,5 @@ def dataset_split_time():
 #dataset_split_users()
 #dataset_split_time()
 #experiments_groupings()
-#statistical_analysis_events()
+statistical_analysis_events()
 #statistical_analysis_items()
