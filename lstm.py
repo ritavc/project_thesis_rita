@@ -27,49 +27,57 @@ class LossHistory(keras.callbacks.Callback):
     def on_batch_end(self, batch, logs={}):
         self.losses.append(logs.get('loss'))
 
-# KERAS CATEGORICAL CROSS ENTROPY LOSS FUNCTION
-"""def loss(target, output, from_logits=False, axis=-1):
-        Categorical crossentropy between an output tensor and a target tensor.
-            # Arguments
-                output: A tensor resulting from a softmax
-                    (unless `from_logits` is True, in which
-                    case `output` is expected to be the logits).
-                target: A tensor of the same shape as `output`.
-                from_logits: Boolean, whether `output` is the
-                    result of a softmax, or is a tensor of logits.
-            # Returns
-                Output tensor.
 
-        # Note: tf.nn.softmax_cross_entropy_with_logits
-        # expects logits, Keras expects probabilities.
-        if not from_logits:
-            # scale preds so that the class probas of each sample sum to 1
-            output /= tf.reduce_sum(output,
-                                    reduction_indices=len(output.get_shape()) - 1,
-                                    keep_dims=True)
-            # manual computation of crossentropy
-            epsilon = _to_tensor(_EPSILON, output.dtype.base_dtype)
-            output = tf.clip_by_value(output, epsilon, 1. - epsilon)
-            return - tf.reduce_sum(target * tf.log(output),
-                                   reduction_indices=len(output.get_shape()) - 1)
-        else:
-            return tf.nn.softmax_cross_entropy_with_logits(labels=target,
-                                                           logits=output)
+df_cat = pd.read_csv(
+    '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_tree.csv')  # , converters={'parentid': lambda x: str(x)})
+df_cat = df_cat.fillna(-1)
+df_cat = df_cat.astype(int)
 
 
-    # custom loss function
-    def loss(y_true, y_pred):
-        #y_true_array = y_true.eval(session=tf.compat.v1.Session())
-        #cannot use eval inside loss function...
-        #loss_cat_crossentropy = tf.keras.losses.CategoricalCrossentropy()
-        #l = loss_cat_crossentropy(y_true, y_pred)
-        #d = K.print_tensor(l)
-        y_true = K.print_tensor(y_pred)
-        y_pred = K.print_tensor(y_pred)
-        return K.categorical_crossentropy(y_true, y_pred)
-       # return l
-        """
+def empty_initial_categories_dict():
+    list_cats_initial = []
+    tree_dict = dict()
+    root_cats = df_cat.loc[(df_cat.parentid == -1)]
+    root_cats = list(root_cats.categoryid)
+    root_cats.sort()
+    for cat in root_cats:
+        tree_dict[cat] = []
+    # print(root_cats)
+    return tree_dict
 
+
+def category_tree():
+    tree_dict = empty_initial_categories_dict()  ###level 1
+    list_root_categories = list(tree_dict.keys())
+    aux_dict_2 = {}
+    for cat in list_root_categories:  ###level 2
+        categories_next_level = df_cat.loc[(df_cat.parentid == int(cat))]
+        l = list(categories_next_level.categoryid)
+        l.sort()
+        tree_dict[cat] = l
+        for elem in l:
+            aux_dict_2[elem] = cat
+    return aux_dict_2
+
+# one hot encode value of sequence
+def one_hot_encode(value, n_features, unique_cats):
+    vector = [0 for _ in range(n_features)]
+    vector[unique_cats.index(value)] = 1
+    return vector
+
+# decode a one hot encoded sequence
+def one_hot_decode(encoded_seq, unique_cats):
+    decoded_seq = []
+    # returns index of highest probability value in array.
+    for vector in encoded_seq:
+        highest_value_index = np.argmax(vector)
+        if vector[0] != -1:
+           decoded_seq.append(unique_cats[highest_value_index])
+    return decoded_seq
+
+def one_hot_decode_target(encoded_prediction, unique_cats):
+    value = unique_cats[encoded_prediction.index(1)]
+    return value
 
 def lstm_model_categorical_data_concat():
     df_visitors_no_split = pd.read_csv(
@@ -86,12 +94,12 @@ def lstm_model_categorical_data_concat():
     df_train = pd.read_csv(
         '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_train_set.csv')
     df_validation = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_val_set.csv')
-    #############
+    ############# for testing purposes (less time consuming using a smaller dataset):
     train_pct_index = int(0.25 * len(df_train))
     df_train, df_discard_train = df_train[:train_pct_index], df_train[train_pct_index:]
     test_pct_index = int(0.10 * len(df_validation))
     df_validation, df_discard_test = df_validation[:test_pct_index], df_validation[test_pct_index:]
-    # ----
+    ############
     df_train['sequence_cats_level1'] = [ast.literal_eval(cat_list_string) for cat_list_string in
                                         df_train['sequence_cats_level1']]
     df_validation['sequence_cats_level1'] = [ast.literal_eval(cat_list_string) for cat_list_string in
@@ -105,39 +113,6 @@ def lstm_model_categorical_data_concat():
     df_validation['sequence_events'] = [ast.literal_eval(event_list_string) for event_list_string in
                                         df_validation['sequence_events']]
 
-    ############
-
-    # one hot encode value of sequence
-    def one_hot_encode(value, n_features, unique_cats):
-        vector = [0 for _ in range(n_features)]
-        vector[unique_cats.index(value)] = 1
-        return vector
-
-    # decode a one hot encoded sequence
-    def one_hot_decode(encoded_seq, unique_cats):
-        decoded_seq = []
-        # returns index of highest probability value in array.
-        for vector in encoded_seq:
-            highest_value_index = np.argmax(vector)
-            if vector[0] != -1:
-                decoded_seq.append(unique_cats[highest_value_index])
-        return decoded_seq
-
-    def one_hot_decode_target(encoded_prediction, unique_cats):
-        value = unique_cats[encoded_prediction.index(1)]
-        return value
-
-    def w_categorical_crossentropy(y_true, y_pred, weights):
-        nb_cl = len(weights)
-        final_mask = K.zeros_like(y_pred[:, 0])
-        y_pred_max = K.max(y_pred, axis=1)
-        y_pred_max = K.reshape(y_pred_max, (K.shape(y_pred)[0], 1))
-        y_pred_max_mat = K.cast(K.equal(y_pred, y_pred_max), K.floatx())
-        for c_p, c_t in product(range(nb_cl), range(nb_cl)):
-            final_mask += (weights[c_t, c_p] * y_pred_max_mat[:, c_p] * y_true[:, c_t])
-        cross_ent = K.categorical_crossentropy(y_true, y_pred, from_logits=False)
-        return cross_ent * final_mask
-
     X_train_level1 = df_train['sequence_cats_level1']
     y_train_level1 = df_train['next_cat_level1']
     X_train_level2 = df_train['sequence_cats_level2']
@@ -146,14 +121,13 @@ def lstm_model_categorical_data_concat():
     y_val_level1 = df_validation['next_cat_level1']
     X_val_level2 = df_validation['sequence_cats_level2']
     y_val_level2 = df_validation['next_cat_level2']
+
     categories_level1 = len(unique_cats_level1)
     categories_level2 = len(unique_cats_level2)
     events_unique = 3
     timesteps = 0
     units = 25
     samples = X_train_level1.shape[0]
-
-    hierarchy_aux_dict = {} #for loss function. for an easier level1 parent search.
 
     for current_sequence in X_train_level1:
         if len(current_sequence) > timesteps:
@@ -164,12 +138,7 @@ def lstm_model_categorical_data_concat():
         if len(current_sequence) > timesteps:
             timesteps = len(current_sequence)
 
-    print("max len:")
-    print(timesteps)  # same for level1 and level2 obviously.
-    print("samples in training set:")
-    print(samples)
-    print("samples in validation set:")
-    print(samples_val)
+    hierarchy_aux_dict = category_tree()  # for the weights matrix (easier level1 parent search) to be used in the loss function.
 
     input_encoded_train = []
     output_encoded_train = []
@@ -179,8 +148,6 @@ def lstm_model_categorical_data_concat():
         for v in range(len(current_sequence)):
             value1 = X_train_level1[x][v]
             value2 = X_train_level2[x][v]
-            hierarchy_aux_dict[value2] = value1
-
             one_sequence_encoding_input.append((one_hot_encode(value1, categories_level1, unique_cats_level1) +
                                                 one_hot_encode(value2, categories_level2, unique_cats_level2)))
         if (v + 1) < timesteps:  # -1 as a value chosen to ignore (mask) positions in the sequence with no values
@@ -203,8 +170,6 @@ def lstm_model_categorical_data_concat():
         for v in range(len(current_sequence)):
             value1 = X_val_level1[z][v]
             value2 = X_val_level2[z][v]
-            hierarchy_aux_dict[value2] = value1
-
             one_sequence_encoding_input.append((one_hot_encode(value1, categories_level1, unique_cats_level1) +
                                                 one_hot_encode(value2, categories_level2, unique_cats_level2)))
         if (v + 1) < timesteps:  # -1 as a value chosen to ignore (mask) positions in the sequence with no values
@@ -224,10 +189,120 @@ def lstm_model_categorical_data_concat():
     X_val = X_val.reshape(samples_val, timesteps, (categories_level1 + categories_level2))
     y_val = array(output_encoded_val)
 
-    ## dummy weigths matrix construction:
+    ################################        Loss Function Customization - Example w/ numpy:
+    print("EXAMPLE CASE LOSS FUNCTION W/ WEIGHTS")
+
+    y_true_example = array([[0, 1, 0, 0, 1, 0],
+                            [1, 0, 0, 0, 0, 1],
+                            [1, 0, 0, 0, 0, 1]])
+    y_pred_example = array(
+        [[0.01, 0.8, 0.3, 0.1, 0.1, 0.0],
+         [0.7, 0.4, 0.5, 0.0, 0.25, 0.6],
+         [0.3, 0.2, 0.2, 0.02, 0.3, 0.7]])
+
+    weights_example = array([[1, 0.3, 0.3, 0.3, 0.8, 0.1],
+                             [0.3, 1, 0.3, 0.3, 0.1, 0.8],
+                             [0.3, 0.3, 1, 0.3, 0.8, 0.8],
+                             [0.3, 0.3, 0.3, 1, 0.8, 0.8],
+                             [0.8, 0.1, 0.8, 0.8, 1, 0.3],
+                             [0.1, 0.8, 0.8, 0.8, 0.3, 1]])
+
+    y_pred_max1_example = np.max(y_pred_example[:, :4],
+                                 axis=1)  # selects the feature level1 w/ the maximum value in the sample.
+    y_pred_max2_example = np.max(y_pred_example[:, 4:],
+                                 axis=1)  # selects the feature level2 w/ the maximum value in the sample.
+
+    y_pred_max1_example = np.expand_dims(y_pred_max1_example, 1)
+    y_pred_max2_example = np.expand_dims(y_pred_max2_example, 1)
+
+    y_pred_max_mat1 = np.equal(y_pred_example[:, :4], y_pred_max1_example)
+    y_pred_max_mat2 = np.equal(y_pred_example[:, 4:], y_pred_max2_example)
+
+    y_pred_max_mat_example = np.concatenate((y_pred_max_mat1, y_pred_max_mat2), axis=1)
+
+    final_mask_example = np.zeros_like(y_pred_example[:, 0])  # array([0, 0, 0])
+
+    for predicted, true in product(range(len(weights_example)), range(len(weights_example))):
+        print('\n')
+        print("-----> predicted, current: " + str(predicted) + "\t" + str(true))
+        print("weights_example[predicted, true] = " + str(weights_example[predicted, true]))
+        print("y_pred_max_mat[:, predicted] = " + str(y_pred_max_mat_example[:, predicted]))
+        print("y_true_example[:, true] = " + str(y_true_example[:, true]))
+        print(str(weights_example[predicted, true]) + " * " + str(y_pred_max_mat_example[:, predicted]) + " * " + str(
+            y_true_example[:, true]) + " = "
+              + str(
+            (weights_example[predicted, true] * y_pred_max_mat_example[:, predicted] * y_true_example[:, true])))
+        final_mask_example += (
+                weights_example[predicted, true] * y_pred_max_mat_example[:, predicted] * y_true_example[:, true])
+        print("final mask current: " + str(final_mask_example))
+    print('\n')
+    print("final mask: " + str(final_mask_example))
+
+    ################################        Loss Function Customization - Function Construction:
+
+    def w_categorical_crossentropy(y_true, y_pred, weights):
+        print(y_true.shape)  # it has to have the same shape as y_train.
+        # [[1-hot encoding next category in seq1], [1-hot encoding next category in seq2], [1-hot encoding next category in seq3], ...]
+        # so, (samples, total features). it prints: (None, None).
+        print(y_pred.shape)  # again, (samples, total features).
+        # it prints: (None, 151). note: 151 is the total number of features.
+        weights_matrix_len = len(weights)  # it prints: 151
+
+        y_pred_max = K.max(y_pred,
+                           axis=1)  # gets the maximum probability from each sample. # [max_prob in sample1, max_prob in sample2, max_prob in sample3,...] #printed shape: (None,).
+
+        y_pred_max = K.reshape(y_pred_max, (K.shape(y_pred)[0], 1))
+
+        y_pred_max_mat = K.cast(K.equal(y_pred, y_pred_max), K.floatx())
+        # K.equal(y_pred, y_pred_max) returns a boolean tensor,
+        # convert a boolean tensor into a float32 tensor type.
+        # prints shape=(None, 151).
+
+        final_mask = K.zeros_like(y_pred[:, 0])  # each row of y_pred with the value of 0.
+        # array [0, 0, 0, 0, 0, ...] total of samples
+        # initial mask to be used next when constructing the mask in the loop.
+
+        for pos_pred, pos_true in product(range(weights_matrix_len), range(
+                weights_matrix_len)):  # product python. goes through the weights square matrix (weights_matrix_len X weights_matrix_len)
+            final_mask += (weights[pos_pred, pos_true] * y_pred_max_mat[:, pos_pred] * y_true[:, pos_true])
+        # in the end, the final mask has the adjusted weight for each sample in the dataset.
+        cross_ent = K.categorical_crossentropy(y_true, y_pred, from_logits=False)
+        return cross_ent * final_mask
+
+    def w_categorical_crossentropy_levels(y_true, y_pred, weights):
+        weights_matrix_len = len(weights)
+
+        y_pred_max_l1 = K.max(y_pred[:, :categories_level1],
+                              axis=1)
+        y_pred_max_l2 = K.max(y_pred[:, categories_level1:],
+                              axis=1)
+        y_pred_max_l1 = K.reshape(y_pred_max_l1, (K.shape(y_pred)[0], 1))
+        y_pred_max_l2 = K.reshape(y_pred_max_l2, (K.shape(y_pred)[0], 1))
+
+        y_pred_max_mat_l1 = K.cast(K.equal(y_pred[:, :categories_level1], y_pred_max_l1), K.floatx())
+        y_pred_max_mat_l2 = K.cast(K.equal(y_pred[:, categories_level1:], y_pred_max_l2), K.floatx())
+
+        y_pred_max_mat = K.concatenate((y_pred_max_mat_l1, y_pred_max_mat_l2), axis=1)
+
+        final_mask = K.zeros_like(y_pred[:, 0])
+
+        for pos_pred, pos_true in product(range(weights_matrix_len), range(
+                weights_matrix_len)):
+            final_mask += (weights[pos_pred, pos_true] * y_pred_max_mat[:, pos_pred] * y_true[:, pos_true])
+
+        cross_ent_1 = K.categorical_crossentropy(y_true[:, :categories_level1], y_pred[:, :categories_level1],
+                                                 from_logits=False)
+        cross_ent_2 = K.categorical_crossentropy(y_true[:, categories_level1:], y_pred[:, categories_level1:],
+                                                 from_logits=False)
+
+        cross_ent = cross_ent_1 + cross_ent_2
+        return cross_ent * final_mask
+
+    ################################       Loss Function Customization - Weights Matrices
+    ## A) dummy weigths matrix construction:
     w_array_dummy = np.ones(((categories_level1 + categories_level2), (categories_level1 + categories_level2)))
 
-    ## Weigths matrix construction:
+    ## B) Weigths matrix construction:
     w_array_basic = np.ones(((categories_level1 + categories_level2), (categories_level1 + categories_level2)))
     high_weight = 0.8
     medium_weight = 0.3
@@ -244,18 +319,17 @@ def lstm_model_categorical_data_concat():
                 elif predicted > categories_level1 and real > categories_level1:
                     w_array_basic[predicted, real] = medium_weight
 
-    ## Weigths matrix real costumization:
+    ## C) Weigths matrix real costumization:
     w_array_new = np.ones(((categories_level1 + categories_level2), (categories_level1 + categories_level2)))
     high_weight_new = 0.8  # higher penalization
     medium_weight_new = 0.3  # medium penalization
     low_weight_new = 0.1  # low penalization
-
     for predicted in range((categories_level1 + categories_level2)):
         for real in range((categories_level1 + categories_level2)):
             if predicted != real:
                 if predicted > categories_level1 and real < categories_level1: #when predicted and real categories are from different levels. establish here a relationship (a strong one or weak one).
                     predicted_l2 = predicted
-                    value_level2 = unique_cats_level2[predicted-categories_level1]
+                    value_level2 = unique_cats_level2[predicted_l2-categories_level1]
                     value_level1 = hierarchy_aux_dict[value_level2]
                     index_value_level1 = unique_cats_level1.index(value_level1)
                     w_array_new[predicted_l2, index_value_level1] = low_weight_new #establishing a strong relationship between these categories. low penalization
@@ -264,21 +338,18 @@ def lstm_model_categorical_data_concat():
                         if real_1 != index_value_level1: #establishing a weak relationship between these categories. high penalization
                             w_array_new[predicted_l2, real_1] = high_weight_new
                             w_array_new[real_1, predicted_l2] = high_weight_new
-
                 elif predicted < categories_level1 and real < categories_level1:  # at least both categories are from level 1
                     w_array_new[predicted, real] = medium_weight_new
                 elif predicted > categories_level1 and real > categories_level1:  # at least both categories are from level 2
                     w_array_new[predicted, real] = medium_weight_new
-
-
             #else: do nothing.
 
-
-
-    # custom_loss = partial(w_categorical_crossentropy, weights=w_array_dummy)
-    custom_loss = partial(w_categorical_crossentropy, weights=w_array_basic)
-    #custom_loss = partial(w_categorical_crossentropy, weights=w_array_new)
+    # custom_loss = partial(w_categorical_crossentropy_levels, weights=w_array_dummy)
+    # custom_loss = partial(w_categorical_crossentropy_levels, weights=w_array_basic)
+    custom_loss = partial(w_categorical_crossentropy_levels, weights=w_array_new)
     custom_loss.__name__ = 'w_categorical_crossentropy'
+
+    ################################    LSTM Model:
 
     dropout = 0.4
     model = Sequential()
@@ -349,10 +420,11 @@ def lstm_model_categorical_data_concat():
     print('Predicted decoded level1: %s' % one_hot_decode([predicted_l1], unique_cats_level1)[0])
     print('Predicted decoded level2: %s' % one_hot_decode([predicted_l2], unique_cats_level2)[0])
 
+    ##################################
 
 lstm_model_categorical_data_concat()
 
-
+'''
 ##### STANDARD LSTM MODEL. FIRST MODEL:
 def lstm_model_categorical_data_first():
     df_visitors_no_split = pd.read_csv(
@@ -509,3 +581,4 @@ def lstm_model_categorical_data_first():
 
 
 # lstm_model_categorical_data_first()
+'''
