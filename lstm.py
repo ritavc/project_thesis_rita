@@ -195,6 +195,7 @@ def lstm_model_categorical_data_concat():
     y_true_example = array([[0, 1, 0, 0, 1, 0],
                             [1, 0, 0, 0, 0, 1],
                             [1, 0, 0, 0, 0, 1]])
+    #features index 0 to 4 are level1, features index 5 to 6 are level2.
     y_pred_example = array(
         [[0.01, 0.8, 0.3, 0.1, 0.1, 0.0],
          [0.7, 0.4, 0.5, 0.0, 0.25, 0.6],
@@ -209,18 +210,32 @@ def lstm_model_categorical_data_concat():
 
     y_pred_max1_example = np.max(y_pred_example[:, :4],
                                  axis=1)  # selects the feature level1 w/ the maximum value in the sample.
+    #in sample1: 0.8
+    #in sample2: 0.7
+    #in sample3: 0.3
     y_pred_max2_example = np.max(y_pred_example[:, 4:],
                                  axis=1)  # selects the feature level2 w/ the maximum value in the sample.
+    # in sample1: 0.1
+    # in sample2: 0.6
+    # in sample3: 0.7
 
     y_pred_max1_example = np.expand_dims(y_pred_max1_example, 1)
     y_pred_max2_example = np.expand_dims(y_pred_max2_example, 1)
 
     y_pred_max_mat1 = np.equal(y_pred_example[:, :4], y_pred_max1_example)
+    #[[False  True False False]
+    #[ True False False False]
+    #[ True False False False]]
     y_pred_max_mat2 = np.equal(y_pred_example[:, 4:], y_pred_max2_example)
-
+    # [[ True False]
+    #  [False  True]
+    #  [False  True]]
     y_pred_max_mat_example = np.concatenate((y_pred_max_mat1, y_pred_max_mat2), axis=1)
-
-    final_mask_example = np.zeros_like(y_pred_example[:, 0])  # array([0, 0, 0])
+    # [[False  True False False True False]
+    # [ True False False False False True]
+    # [ True False False False False True]]
+    final_mask_example = np.zeros_like(y_pred_example[:, 0])
+    # array([0, 0, 0])
 
     for predicted, true in product(range(len(weights_example)), range(len(weights_example))):
         print('\n')
