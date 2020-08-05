@@ -2,6 +2,7 @@ import ast
 import os
 import sys
 from functools import partial
+import matplotlib.pyplot as plt
 
 import numpy as np
 import pandas as pd
@@ -34,6 +35,59 @@ df_cat = df_cat.fillna(-1)
 df_cat = df_cat.astype(int)
 
 
+def dummy_example():
+    categories_level1 = 2
+    categories_level2 = 5
+    unique_cats_level1 = ['A', 'B']
+    unique_cats_level2 = ['C', 'D', 'E', 'F', 'G']
+    hierarchy_aux_dict = {'C': 'A', 'D': 'A', 'F': 'B', 'E': 'B', 'G': 'B'}
+
+    ## C) Weigths matrix real costumization:
+    w_array_new = np.ones(((categories_level1 + categories_level2), (categories_level1 + categories_level2)))
+    high_relation = 0.8
+    medium_relation = 0.5
+    no_relation = 0
+    for predicted in range((categories_level1 + categories_level2)):
+        for real in range(predicted, (categories_level1 + categories_level2)):
+            if predicted != real:
+                if predicted < categories_level1 and real >= categories_level1:  # when predicted and real categories are from different levels. establish here a relationship parent-child.
+                    predicted_l1 = predicted
+                    real_l2 = real
+                    value_level1_predicted = unique_cats_level1[predicted_l1]
+                    value_level2_real = unique_cats_level2[real_l2 - categories_level1]
+                    value_level1_real = hierarchy_aux_dict[value_level2_real]
+
+                    if value_level1_predicted == value_level1_real:
+                        w_array_new[
+                            predicted_l1, real_l2] = high_relation  # establishing a parent-child relationship between these categories.
+                        w_array_new[real_l2, predicted_l1] = high_relation
+                    else:
+                        w_array_new[predicted_l1, real_l2] = no_relation
+                        w_array_new[real_l2, predicted_l1] = no_relation
+
+                elif predicted < categories_level1 and real < categories_level1:  # both categories are different and from level 1
+                    w_array_new[predicted, real] = no_relation
+                    w_array_new[real, predicted] = no_relation
+
+                elif predicted >= categories_level1 and real >= categories_level1:  # both categories are different and from level 2
+                    predicted_l2 = predicted
+                    real_l2 = real
+                    value_level2_predicted = unique_cats_level2[predicted_l2 - categories_level1]
+                    value_level1_predicted = hierarchy_aux_dict[value_level2_predicted]
+                    value_level2_real = unique_cats_level2[real_l2 - categories_level1]
+                    value_level1_real = hierarchy_aux_dict[value_level2_real]
+                    if value_level1_predicted == value_level1_real:
+                        w_array_new[
+                            predicted_l2, real_l2] = medium_relation  # establishing a "brother" relationship between these categories.
+                        w_array_new[real_l2, predicted_l2] = medium_relation
+                    else:
+                        w_array_new[predicted_l2, real_l2] = no_relation
+                        w_array_new[real_l2, predicted_l2] = no_relation
+            # else: do nothing.
+    print(w_array_new)
+
+
+dummy_example()
 def empty_initial_categories_dict():
     list_cats_initial = []
     tree_dict = dict()
@@ -59,11 +113,13 @@ def category_tree():
             aux_dict_2[elem] = cat
     return aux_dict_2
 
+
 # one hot encode value of sequence
 def one_hot_encode(value, n_features, unique_cats):
     vector = [0 for _ in range(n_features)]
     vector[unique_cats.index(value)] = 1
     return vector
+
 
 # decode a one hot encoded sequence
 def one_hot_decode(encoded_seq, unique_cats):
@@ -72,12 +128,14 @@ def one_hot_decode(encoded_seq, unique_cats):
     for vector in encoded_seq:
         highest_value_index = np.argmax(vector)
         if vector[0] != -1:
-           decoded_seq.append(unique_cats[highest_value_index])
+            decoded_seq.append(unique_cats[highest_value_index])
     return decoded_seq
+
 
 def one_hot_decode_target(encoded_prediction, unique_cats):
     value = unique_cats[encoded_prediction.index(1)]
     return value
+
 
 def lstm_model_categorical_data_concat():
     df_visitors_no_split = pd.read_csv(
@@ -95,9 +153,9 @@ def lstm_model_categorical_data_concat():
         '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_train_set.csv')
     df_validation = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_val_set.csv')
     ############# for testing purposes (less time consuming using a smaller dataset):
-    train_pct_index = int(0.25 * len(df_train))
+    train_pct_index = int(0.5 * len(df_train))
     df_train, df_discard_train = df_train[:train_pct_index], df_train[train_pct_index:]
-    test_pct_index = int(0.10 * len(df_validation))
+    test_pct_index = int(0.4 * len(df_validation))
     df_validation, df_discard_test = df_validation[:test_pct_index], df_validation[test_pct_index:]
     ############
     df_train['sequence_cats_level1'] = [ast.literal_eval(cat_list_string) for cat_list_string in
@@ -126,7 +184,6 @@ def lstm_model_categorical_data_concat():
     categories_level2 = len(unique_cats_level2)
     events_unique = 3
     timesteps = 0
-    units = 25
     samples = X_train_level1.shape[0]
 
     for current_sequence in X_train_level1:
@@ -137,6 +194,9 @@ def lstm_model_categorical_data_concat():
     for current_sequence in X_val_level1:
         if len(current_sequence) > timesteps:
             timesteps = len(current_sequence)
+
+    print("TIMESTEPS: " + str(timesteps))
+    print("SAMPLES: " + str(samples))
 
     hierarchy_aux_dict = category_tree()  # for the weights matrix (easier level1 parent search) to be used in the loss function.
 
@@ -189,72 +249,7 @@ def lstm_model_categorical_data_concat():
     X_val = X_val.reshape(samples_val, timesteps, (categories_level1 + categories_level2))
     y_val = array(output_encoded_val)
 
-    ################################        Loss Function Customization - Example w/ numpy:
-    print("EXAMPLE CASE LOSS FUNCTION W/ WEIGHTS")
-
-    y_true_example = array([[0, 1, 0, 0, 1, 0],
-                            [1, 0, 0, 0, 0, 1],
-                            [1, 0, 0, 0, 0, 1]])
-    #features index 0 to 4 are level1, features index 5 to 6 are level2.
-    y_pred_example = array(
-        [[0.01, 0.8, 0.3, 0.1, 0.1, 0.0],
-         [0.7, 0.4, 0.5, 0.0, 0.25, 0.6],
-         [0.3, 0.2, 0.2, 0.02, 0.3, 0.7]])
-
-    weights_example = array([[1, 0.3, 0.3, 0.3, 0.8, 0.1],
-                             [0.3, 1, 0.3, 0.3, 0.1, 0.8],
-                             [0.3, 0.3, 1, 0.3, 0.8, 0.8],
-                             [0.3, 0.3, 0.3, 1, 0.8, 0.8],
-                             [0.8, 0.1, 0.8, 0.8, 1, 0.3],
-                             [0.1, 0.8, 0.8, 0.8, 0.3, 1]])
-
-    y_pred_max1_example = np.max(y_pred_example[:, :4],
-                                 axis=1)  # selects the feature level1 w/ the maximum value in the sample.
-    #in sample1: 0.8
-    #in sample2: 0.7
-    #in sample3: 0.3
-    y_pred_max2_example = np.max(y_pred_example[:, 4:],
-                                 axis=1)  # selects the feature level2 w/ the maximum value in the sample.
-    # in sample1: 0.1
-    # in sample2: 0.6
-    # in sample3: 0.7
-
-    y_pred_max1_example = np.expand_dims(y_pred_max1_example, 1)
-    y_pred_max2_example = np.expand_dims(y_pred_max2_example, 1)
-
-    y_pred_max_mat1 = np.equal(y_pred_example[:, :4], y_pred_max1_example)
-    #[[False  True False False]
-    #[ True False False False]
-    #[ True False False False]]
-    y_pred_max_mat2 = np.equal(y_pred_example[:, 4:], y_pred_max2_example)
-    # [[ True False]
-    #  [False  True]
-    #  [False  True]]
-    y_pred_max_mat_example = np.concatenate((y_pred_max_mat1, y_pred_max_mat2), axis=1)
-    # [[False  True False False True False]
-    # [ True False False False False True]
-    # [ True False False False False True]]
-    final_mask_example = np.zeros_like(y_pred_example[:, 0])
-    # array([0, 0, 0])
-
-    for predicted, true in product(range(len(weights_example)), range(len(weights_example))):
-        print('\n')
-        print("-----> predicted, current: " + str(predicted) + "\t" + str(true))
-        print("weights_example[predicted, true] = " + str(weights_example[predicted, true]))
-        print("y_pred_max_mat[:, predicted] = " + str(y_pred_max_mat_example[:, predicted]))
-        print("y_true_example[:, true] = " + str(y_true_example[:, true]))
-        print(str(weights_example[predicted, true]) + " * " + str(y_pred_max_mat_example[:, predicted]) + " * " + str(
-            y_true_example[:, true]) + " = "
-              + str(
-            (weights_example[predicted, true] * y_pred_max_mat_example[:, predicted] * y_true_example[:, true])))
-        final_mask_example += (
-                weights_example[predicted, true] * y_pred_max_mat_example[:, predicted] * y_true_example[:, true])
-        print("final mask current: " + str(final_mask_example))
-    print('\n')
-    print("final mask: " + str(final_mask_example))
-
     ################################        Loss Function Customization - Function Construction:
-
     def w_categorical_crossentropy(y_true, y_pred, weights):
         print(y_true.shape)  # it has to have the same shape as y_train.
         # [[1-hot encoding next category in seq1], [1-hot encoding next category in seq2], [1-hot encoding next category in seq3], ...]
@@ -304,142 +299,193 @@ def lstm_model_categorical_data_concat():
         for pos_pred, pos_true in product(range(weights_matrix_len), range(
                 weights_matrix_len)):
             final_mask += (weights[pos_pred, pos_true] * y_pred_max_mat[:, pos_pred] * y_true[:, pos_true])
+        '''
+        cross_ent_1 = K.categorical_crossentropy(y_true[:, :categories_level1], y_pred[:, :categories_level1],
+                                                 from_logits=False)
+        cross_ent_2 = K.categorical_crossentropy(y_true[:, categories_level1:], y_pred[:, categories_level1:],
+                                                 from_logits=False)
+
+        cross_ent = cross_ent_1 + cross_ent_2'''
+        cross_ent = K.categorical_crossentropy(y_true, y_pred,
+                                               from_logits=False)
+        return cross_ent * final_mask
+
+    def w_categorical_crossentropy_none_levels(y_true, y_pred):
 
         cross_ent_1 = K.categorical_crossentropy(y_true[:, :categories_level1], y_pred[:, :categories_level1],
                                                  from_logits=False)
         cross_ent_2 = K.categorical_crossentropy(y_true[:, categories_level1:], y_pred[:, categories_level1:],
                                                  from_logits=False)
 
-        cross_ent = cross_ent_1 + cross_ent_2
-        return cross_ent * final_mask
+        cross_ent = cross_ent_1 * cross_ent_2
+        return cross_ent
+
+    def w_categorical_crossentropy_none(y_true, y_pred):
+
+        cross_ent = K.categorical_crossentropy(y_true, y_pred, from_logits=False)
+        return cross_ent
 
     ################################       Loss Function Customization - Weights Matrices
-    ## A) dummy weigths matrix construction:
+    ## A) dummy weigths matrix construction. Matrix w/ all 1s. All categories relationships w/ the same importance:
     w_array_dummy = np.ones(((categories_level1 + categories_level2), (categories_level1 + categories_level2)))
 
-    ## B) Weigths matrix construction:
-    w_array_basic = np.ones(((categories_level1 + categories_level2), (categories_level1 + categories_level2)))
-    high_weight = 0.8
-    medium_weight = 0.3
-
-    for predicted in range((categories_level1 + categories_level2)):
-        for real in range((categories_level1 + categories_level2)):
-            if predicted != real:
-                if predicted < categories_level1 and real > categories_level1:  # predicted category of level1 when it should be of level2
-                    w_array_basic[predicted, real] = high_weight
-                elif predicted < categories_level1 and real < categories_level1:
-                    w_array_basic[predicted, real] = medium_weight
-                elif predicted > categories_level1 and real < categories_level1:
-                    w_array_basic[predicted, real] = high_weight
-                elif predicted > categories_level1 and real > categories_level1:
-                    w_array_basic[predicted, real] = medium_weight
-
-    ## C) Weigths matrix real costumization:
+    ## B) Weigths matrix real costumization:
     w_array_new = np.ones(((categories_level1 + categories_level2), (categories_level1 + categories_level2)))
-    high_weight_new = 0.8  # higher penalization
-    medium_weight_new = 0.3  # medium penalization
-    low_weight_new = 0.1  # low penalization
+    high_relation = 1  # no penalization - parent and son categories. relationship of high importance
+    medium_relation = 1  # no penalization - siblings categories. relationship of high importance
+    no_relation = 0  # high penalization
     for predicted in range((categories_level1 + categories_level2)):
-        for real in range((categories_level1 + categories_level2)):
+        for real in range(predicted, (categories_level1 + categories_level2)):
             if predicted != real:
-                if predicted > categories_level1 and real < categories_level1: #when predicted and real categories are from different levels. establish here a relationship (a strong one or weak one).
-                    predicted_l2 = predicted
-                    value_level2 = unique_cats_level2[predicted_l2-categories_level1]
-                    value_level1 = hierarchy_aux_dict[value_level2]
-                    index_value_level1 = unique_cats_level1.index(value_level1)
-                    w_array_new[predicted_l2, index_value_level1] = low_weight_new #establishing a strong relationship between these categories. low penalization
-                    w_array_new[index_value_level1, predicted_l2] = low_weight_new
-                    for real_1 in range(categories_level1):
-                        if real_1 != index_value_level1: #establishing a weak relationship between these categories. high penalization
-                            w_array_new[predicted_l2, real_1] = high_weight_new
-                            w_array_new[real_1, predicted_l2] = high_weight_new
-                elif predicted < categories_level1 and real < categories_level1:  # at least both categories are from level 1
-                    w_array_new[predicted, real] = medium_weight_new
-                elif predicted > categories_level1 and real > categories_level1:  # at least both categories are from level 2
-                    w_array_new[predicted, real] = medium_weight_new
-            #else: do nothing.
+                if predicted < categories_level1 and real >= categories_level1:  # when predicted and real categories are from different levels. establish here a relationship parent-child.
+                    predicted_l1 = predicted
+                    real_l2 = real
+                    value_level1_predicted = unique_cats_level1[predicted_l1]
+                    value_level2_real = unique_cats_level2[real_l2 - categories_level1]
+                    value_level1_real = hierarchy_aux_dict[value_level2_real]
 
-    # custom_loss = partial(w_categorical_crossentropy_levels, weights=w_array_dummy)
-    # custom_loss = partial(w_categorical_crossentropy_levels, weights=w_array_basic)
-    custom_loss = partial(w_categorical_crossentropy_levels, weights=w_array_new)
-    custom_loss.__name__ = 'w_categorical_crossentropy'
+                    if value_level1_predicted == value_level1_real:
+                        w_array_new[
+                            predicted_l1, real_l2] = high_relation  # establishing a parent-child relationship between these categories.
+                        w_array_new[real_l2, predicted_l1] = high_relation
+                    else:
+                        w_array_new[predicted_l1, real_l2] = no_relation
+                        w_array_new[real_l2, predicted_l1] = no_relation
+
+                elif predicted < categories_level1 and real < categories_level1:  # both categories are different and from level 1
+                    w_array_new[predicted, real] = no_relation
+                    w_array_new[real, predicted] = no_relation
+
+                elif predicted >= categories_level1 and real >= categories_level1:  # both categories are different and from level 2
+                    predicted_l2 = predicted
+                    real_l2 = real
+                    value_level2_predicted = unique_cats_level2[predicted_l2 - categories_level1]
+                    value_level1_predicted = hierarchy_aux_dict[value_level2_predicted]
+                    value_level2_real = unique_cats_level2[real_l2 - categories_level1]
+                    value_level1_real = hierarchy_aux_dict[value_level2_real]
+                    if value_level1_predicted == value_level1_real:
+                        w_array_new[
+                            predicted_l2, real_l2] = medium_relation  # establishing a "brother" relationship between these categories.
+                        w_array_new[real_l2, predicted_l2] = medium_relation
+                    else:
+                        w_array_new[predicted_l2, real_l2] = no_relation
+                        w_array_new[real_l2, predicted_l2] = no_relation
+            # else: do nothing
+    print("weights matrix constructed.")
 
     ################################    LSTM Model:
 
-    dropout = 0.4
-    model = Sequential()
-    model.add(Masking(mask_value=-1, input_shape=(timesteps, (categories_level1 + categories_level2))))
-    model.add(LSTM(units, input_shape=(timesteps, (categories_level1 + categories_level2)), dropout=dropout,
-                   return_sequences=False))  # units-> random number. trial and error methodology.
-    model.add(Dense((categories_level1 + categories_level2), activation='softmax'))
-    # model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['acc'])
-    model.compile(loss=custom_loss, optimizer='adam', metrics=['acc'])
-    print(model.summary())
-    # history = LossHistory()
-    print("model fit")
-    model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=3, verbose=0)
-    print("model evaluate")
-    loss_train, accuracy_train = model.evaluate(X_train, y_train, verbose=0)
-    print('Accuracy train: %f' % (accuracy_train * 100))
-    loss_test, accuracy_test = model.evaluate(X_val, y_val, verbose=0)
-    print('Accuracy validation: %f' % (accuracy_test * 100))
-    # print(history.losses)
-    # print(len(history.losses))
+    def build_model(X_t, y_t, X_v, y_v, loss, title, weights_mat):
+        print("----")
+        print("MODEL "+str(title))
+        units = 30
+        dropout = 0.4
+        model = Sequential()
+        model.add(Masking(mask_value=-1, input_shape=(timesteps, (categories_level1 + categories_level2))))
+        model.add(LSTM(units, input_shape=(timesteps, (categories_level1 + categories_level2)), dropout=dropout,
+                       return_sequences=False))  # units-> random number. trial and error methodology.
+        model.add(Dense((categories_level1 + categories_level2), activation='softmax'))
+        #model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['acc'])
 
-    ################################## test on a new sample. prediction on a SINGLE new data sequence. experiment
-    sequence_test_level1 = [140, 140, 140, 140, 140, 859, 653, 1490, 1490, 653]
-    sequence_test_level2 = [1519, 1519, 384, 384, 1519, 1473, 312, 145, 798, 92]
-    encoded_test_seq_input = []
-    for predicted in range(len(sequence_test_level1)):
-        value1 = sequence_test_level1[predicted]
-        value2 = sequence_test_level2[predicted]
-        encoded_test_seq_input.append((one_hot_encode(value1, categories_level1, unique_cats_level1) +
-                                       one_hot_encode(value2, categories_level2, unique_cats_level2)))
+        # custom_loss = partial(w_categorical_crossentropy_none)
+        custom_loss = partial(loss, weights=weights_mat)
+        custom_loss.__name__ = 'w_categorical_crossentropy'
+        model.compile(loss=custom_loss, optimizer='adam', metrics=['acc'])
+        print(model.summary())
 
-    if (predicted + 1) < timesteps:  # -1 as a value chosen to ignore (mask) positions in the sequence with no values
-        for real in range(timesteps - (predicted + 1)):
-            encoded_test_seq_input.append(([-1 for _ in range(categories_level1)] +
-                                           [-1 for _ in range(categories_level2)]))
+        # history = LossHistory()
+        print("model fit")
+        history = model.fit(X_t, y_t, validation_data=(X_v, y_v), epochs=60, verbose=0)
+        print("model evaluate")
+        loss_train, accuracy_train = model.evaluate(X_t, y_t, verbose=0)
+        print('Accuracy train: %f' % (accuracy_train * 100))
+        loss_test, accuracy_test = model.evaluate(X_v, y_v, verbose=0)
+        print('Accuracy validation: %f' % (accuracy_test * 100))
+        # PLOT
+        plt.ylim(0.0, 1.0)
+        plt.plot(history.history['acc'])
+        plt.plot(history.history['val_acc'])
+        # plt.title('model accuracy')
+        plt.ylabel('accuracy')
+        plt.xlabel('epoch')
+        plt.title(title, pad=-80)
 
-    X_test_sample = [encoded_test_seq_input]
-    X_test_sample = array(X_test_sample)
-    # print(X_test_sample.shape)
+        plt.legend(['train', 'val'], loc='upper left')
+        # plt.show()
 
-    y_test_real_level1 = 653
-    y_test_real_level2 = 312
+        ################################## test on a new sample. prediction on a SINGLE new data sequence. experiment
+        sequence_test_level1 = [653, 1490, 1490, 653]
+        sequence_test_level2 = [312, 145, 798, 92]
+        encoded_test_seq_input = []
+        for pred in range(len(sequence_test_level1)):
+            v1 = sequence_test_level1[pred]
+            v2 = sequence_test_level2[pred]
+            encoded_test_seq_input.append((one_hot_encode(v1, categories_level1, unique_cats_level1) +
+                                           one_hot_encode(v2, categories_level2, unique_cats_level2)))
 
-    y_predicted = model.predict(X_test_sample)
-    encoded_test_l1 = []
-    encoded_test_l2 = []
-    for position_seq in X_test_sample[0]:
-        encoded_complete_value = position_seq
-        encoded_value_level1 = encoded_complete_value[:categories_level1]
-        encoded_value_level2 = encoded_complete_value[categories_level1:]
-        encoded_test_l1.append(encoded_value_level1.tolist())
-        encoded_test_l2.append(encoded_value_level2.tolist())
+        if (pred + 1) < timesteps:  # -1 as a value chosen to ignore (mask) positions in the sequence with no values
+            for true in range(timesteps - (pred + 1)):
+                encoded_test_seq_input.append(([-1 for _ in range(categories_level1)] +
+                                               [-1 for _ in range(categories_level2)]))
 
-    decoded_value_level1 = one_hot_decode(encoded_test_l1, unique_cats_level1)
-    decoded_value_level2 = one_hot_decode(encoded_test_l2, unique_cats_level2)
-    print("Sequence level1: %s" % decoded_value_level1)
-    print("Sequence level2: %s" % decoded_value_level2)
+        X_test_sample = [encoded_test_seq_input]
+        X_test_sample = array(X_test_sample)
+        # print(X_test_sample.shape)
 
-    print('Expected level1: %s' % y_test_real_level1)
-    print('Expected level2: %s' % y_test_real_level2)
+        y_test_real_level1 = 653
+        y_test_real_level2 = 312
 
-    predicted_l1 = y_predicted[0][:categories_level1]
-    predicted_l2 = y_predicted[0][categories_level1:]
+        y_predicted = model.predict(X_test_sample)
+        encoded_test_l1 = []
+        encoded_test_l2 = []
+        for position_seq in X_test_sample[0]:
+            encoded_complete_value = position_seq
+            encoded_value_level1 = encoded_complete_value[:categories_level1]
+            encoded_value_level2 = encoded_complete_value[categories_level1:]
+            encoded_test_l1.append(encoded_value_level1.tolist())
+            encoded_test_l2.append(encoded_value_level2.tolist())
 
-    print('Predicted level1: %s' % [predicted_l1], unique_cats_level1[0])
-    print('Predicted level2: %s' % [predicted_l2], unique_cats_level2[0])
+        decoded_value_level1 = one_hot_decode(encoded_test_l1, unique_cats_level1)
+        decoded_value_level2 = one_hot_decode(encoded_test_l2, unique_cats_level2)
+        print("Sequence level1: %s" % decoded_value_level1)
+        print("Sequence level2: %s" % decoded_value_level2)
 
-    print('Predicted decoded level1: %s' % one_hot_decode([predicted_l1], unique_cats_level1)[0])
-    print('Predicted decoded level2: %s' % one_hot_decode([predicted_l2], unique_cats_level2)[0])
+        print('Expected level1: %s' % y_test_real_level1)
+        print('Expected level2: %s' % y_test_real_level2)
+
+        pred_l1 = y_predicted[0][:categories_level1]
+        pred_l2 = y_predicted[0][categories_level1:]
+
+        print('Predicted level1: %s' % [pred_l1], unique_cats_level1[0])
+        print('Predicted level2: %s' % [pred_l2], unique_cats_level2[0])
+
+        print('Predicted decoded level1: %s' % one_hot_decode([pred_l1], unique_cats_level1)[0])
+        print('Predicted decoded level2: %s' % one_hot_decode([pred_l2], unique_cats_level2)[0])
+
+
+
+
+
+    losses_names = [w_categorical_crossentropy]
+    losses_titles = [
+                     'w_categorical_crossentropy W custom']
+    weights = [w_array_dummy, w_array_new]
+    for i in range(len(losses_names)):
+        # determine the plot number
+        plot_no = 220 + (i + 1)
+        plt.subplot(plot_no)
+        # fit model and plot learning curves for an optimizer
+        build_model(X_train, y_train, X_val, y_val, losses_names[i], losses_titles[i], weights[i])
+
+    plt.show()
+
 
     ##################################
 
+
 lstm_model_categorical_data_concat()
 
-'''
+
 ##### STANDARD LSTM MODEL. FIRST MODEL:
 def lstm_model_categorical_data_first():
     df_visitors_no_split = pd.read_csv(
@@ -452,10 +498,10 @@ def lstm_model_categorical_data_first():
         '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_train_set.csv')
     df_validation = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_val_set.csv')
     #############
-    train_pct_index = int(0.40 * len(df_train))
-    df_train, df_discard_train = df_train[:train_pct_index], df_train[train_pct_index:]
-    test_pct_index = int(0.20 * len(df_validation))
-    df_validation, df_discard_test = df_validation[:test_pct_index], df_validation[test_pct_index:]
+    # train_pct_index = int(0.40 * len(df_train))
+    # df_train, df_discard_train = df_train[:train_pct_index], df_train[train_pct_index:]
+    # test_pct_index = int(0.20 * len(df_validation))
+    # df_validation, df_discard_test = df_validation[:test_pct_index], df_validation[test_pct_index:]
     # ----
     df_train['sequence_cats_level1'] = [ast.literal_eval(cat_list_string) for cat_list_string in
                                         df_train['sequence_cats_level1']]
@@ -513,7 +559,7 @@ def lstm_model_categorical_data_first():
 
     categories_level1 = len(unique_cats_level1)
     max_len = 0
-    units = 25
+    units = 50
     samples = X_train.shape[0]
 
     for seq in X_train:
@@ -563,15 +609,15 @@ def lstm_model_categorical_data_first():
     print(model.summary())
 
     # fit the model
-    model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=3, verbose=0)
+    model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=50, verbose=0)
     # evaluate the model
     loss_train, accuracy_train = model.evaluate(X_train, y_train, verbose=0)
     print('Accuracy train: %f' % (accuracy_train * 100))
     loss_test, accuracy_test = model.evaluate(X_val, y_val, verbose=0)
-    print('Accuracy test: %f' % (accuracy_test * 100))
+    print('Accuracy validation: %f' % (accuracy_test * 100))
 
     # prediction on a SINGLE new data sequence. experiment
-    sequence_test = [140, 140, 140, 140, 140, 859, 653, 1490, 1490, 653]
+    sequence_test = [653, 653, 1490, 1490, 653]
     X_test_new = []
     encoded_seq_level1 = one_hot_encode(sequence_test, categories_level1, max_len)
     X_test_new.append(encoded_seq_level1)
@@ -596,4 +642,3 @@ def lstm_model_categorical_data_first():
 
 
 # lstm_model_categorical_data_first()
-'''
