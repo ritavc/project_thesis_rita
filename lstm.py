@@ -88,6 +88,8 @@ def dummy_example():
 
 
 dummy_example()
+
+
 def empty_initial_categories_dict():
     list_cats_initial = []
     tree_dict = dict()
@@ -153,9 +155,9 @@ def lstm_model_categorical_data_concat():
         '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_train_set.csv')
     df_validation = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_val_set.csv')
     ############# for testing purposes (less time consuming using a smaller dataset):
-    train_pct_index = int(0.5 * len(df_train))
+    train_pct_index = int(0.1 * len(df_train))
     df_train, df_discard_train = df_train[:train_pct_index], df_train[train_pct_index:]
-    test_pct_index = int(0.4 * len(df_validation))
+    test_pct_index = int(0.3 * len(df_validation))
     df_validation, df_discard_test = df_validation[:test_pct_index], df_validation[test_pct_index:]
     ############
     df_train['sequence_cats_level1'] = [ast.literal_eval(cat_list_string) for cat_list_string in
@@ -185,6 +187,7 @@ def lstm_model_categorical_data_concat():
     events_unique = 3
     timesteps = 0
     samples = X_train_level1.shape[0]
+    samples_val = X_val_level1.shape[0]
 
     for current_sequence in X_train_level1:
         if len(current_sequence) > timesteps:
@@ -196,7 +199,8 @@ def lstm_model_categorical_data_concat():
             timesteps = len(current_sequence)
 
     print("TIMESTEPS: " + str(timesteps))
-    print("SAMPLES: " + str(samples))
+    print("SAMPLES train: " + str(samples))
+    print("SAMPLES val: " + str(samples_val))
 
     hierarchy_aux_dict = category_tree()  # for the weights matrix (easier level1 parent search) to be used in the loss function.
 
@@ -248,6 +252,23 @@ def lstm_model_categorical_data_concat():
     X_val = array(input_encoded_val)
     X_val = X_val.reshape(samples_val, timesteps, (categories_level1 + categories_level2))
     y_val = array(output_encoded_val)
+
+    ################################ Evaluation metrics customization
+
+    def categorical_accuracy_l1l2(y_true, y_pred):
+        return K.cast(K.equal(K.argmax(y_true, axis=-1),
+                              K.argmax(y_pred, axis=-1)),
+                      K.floatx())
+
+    def categorical_accuracy_l1(y_true, y_pred):
+        return K.cast(K.equal(K.argmax(y_true[:, :categories_level1], axis=-1),
+                              K.argmax(y_pred[:, :categories_level1], axis=-1)),
+                      K.floatx())
+
+    def categorical_accuracy_l2(y_true, y_pred):
+        return K.cast(K.equal(K.argmax(y_true[:, categories_level1:], axis=-1),
+                              K.argmax(y_pred[:, categories_level1:], axis=-1)),
+                      K.floatx())
 
     ################################        Loss Function Customization - Function Construction:
     def w_categorical_crossentropy(y_true, y_pred, weights):
@@ -317,12 +338,12 @@ def lstm_model_categorical_data_concat():
         cross_ent_2 = K.categorical_crossentropy(y_true[:, categories_level1:], y_pred[:, categories_level1:],
                                                  from_logits=False)
 
-        cross_ent = cross_ent_1 * cross_ent_2
+        cross_ent = cross_ent_1 + cross_ent_2
         return cross_ent
 
     def w_categorical_crossentropy_none(y_true, y_pred):
 
-        cross_ent = K.categorical_crossentropy(y_true, y_pred, from_logits=False)
+        cross_ent = K.categorical_crossentropy(y_true, y_pred, from_logits=True)
         return cross_ent
 
     ################################       Loss Function Customization - Weights Matrices
@@ -331,13 +352,13 @@ def lstm_model_categorical_data_concat():
 
     ## B) Weigths matrix real costumization:
     w_array_new = np.ones(((categories_level1 + categories_level2), (categories_level1 + categories_level2)))
-    high_relation = 1  # no penalization - parent and son categories. relationship of high importance
-    medium_relation = 1  # no penalization - siblings categories. relationship of high importance
-    no_relation = 0  # high penalization
+    high_relation = 0  # no penalization - parent and son categories. relationship of high importance
+    medium_relation = 0.2  # almost no penalization - siblings categories. relationship of high importance
+    no_relation = 1  # high penalization
     for predicted in range((categories_level1 + categories_level2)):
         for real in range(predicted, (categories_level1 + categories_level2)):
             if predicted != real:
-                if predicted < categories_level1 and real >= categories_level1:  # when predicted and real categories are from different levels. establish here a relationship parent-child.
+                if predicted < categories_level1 and real >= categories_level1:  # when predicted and real categories are from different levels. there might be a relationship parent-child.
                     predicted_l1 = predicted
                     real_l2 = real
                     value_level1_predicted = unique_cats_level1[predicted_l1]
@@ -352,11 +373,11 @@ def lstm_model_categorical_data_concat():
                         w_array_new[predicted_l1, real_l2] = no_relation
                         w_array_new[real_l2, predicted_l1] = no_relation
 
-                elif predicted < categories_level1 and real < categories_level1:  # both categories are different and from level 1
+                elif predicted < categories_level1 and real < categories_level1:  # both categories have diff values and are from level 1
                     w_array_new[predicted, real] = no_relation
                     w_array_new[real, predicted] = no_relation
 
-                elif predicted >= categories_level1 and real >= categories_level1:  # both categories are different and from level 2
+                elif predicted >= categories_level1 and real >= categories_level1:  # both categories have diff values and are from level 2
                     predicted_l2 = predicted
                     real_l2 = real
                     value_level2_predicted = unique_cats_level2[predicted_l2 - categories_level1]
@@ -365,7 +386,7 @@ def lstm_model_categorical_data_concat():
                     value_level1_real = hierarchy_aux_dict[value_level2_real]
                     if value_level1_predicted == value_level1_real:
                         w_array_new[
-                            predicted_l2, real_l2] = medium_relation  # establishing a "brother" relationship between these categories.
+                            predicted_l2, real_l2] = medium_relation  # establishing a siblings relationship between these categories. they have the same parent
                         w_array_new[real_l2, predicted_l2] = medium_relation
                     else:
                         w_array_new[predicted_l2, real_l2] = no_relation
@@ -374,44 +395,76 @@ def lstm_model_categorical_data_concat():
     print("weights matrix constructed.")
 
     ################################    LSTM Model:
+    def build_model(X_t, y_t, X_v, y_v, units, dropout, epochs, opt, loss, title, weights_mat, flag_weight, flag_metric):
+        metric_l1l2 = partial(categorical_accuracy_l1l2)
+        metric_l1 = partial(categorical_accuracy_l1)
+        metric_l2 = partial(categorical_accuracy_l2)
 
-    def build_model(X_t, y_t, X_v, y_v, loss, title, weights_mat):
+        metric_l1l2.__name__ = 'categorical_accuracyl1l2'
+        metric_l1.__name__ = 'categorical_accuracyl1'
+        metric_l2.__name__ = 'categorical_accuracyl2'
+
         print("----")
-        print("MODEL "+str(title))
-        units = 30
-        dropout = 0.4
+        print("MODEL " + str(title))
+        units = units
+        dropout = dropout
         model = Sequential()
-        model.add(Masking(mask_value=-1, input_shape=(timesteps, (categories_level1 + categories_level2))))
-        model.add(LSTM(units, input_shape=(timesteps, (categories_level1 + categories_level2)), dropout=dropout,
+        model.add(Masking(mask_value=-1, input_shape=(timesteps, (categories_level1+categories_level2))))
+        model.add(LSTM(units, input_shape=(timesteps, (categories_level1+categories_level2)), dropout=dropout,
                        return_sequences=False))  # units-> random number. trial and error methodology.
-        model.add(Dense((categories_level1 + categories_level2), activation='softmax'))
-        #model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['acc'])
+        model.add(Dense((categories_level1+categories_level2), activation='softmax'))
+        if loss == 'standard':
+            if flag_metric == 1:
+                model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=[metric_l1l2, metric_l1, metric_l2])
+            else:
+                model.compile(loss='categorical_crossentropy', optimizer=opt,
+                              metrics=['acc'])
+        else:
+            if flag_weight == 1:
+                custom_loss = partial(loss, weights=weights_mat)
+            else:
+                custom_loss = partial(loss)
+            custom_loss.__name__ = 'w_categorical_crossentropy'
+            if flag_metric == 1:
+                model.compile(loss=custom_loss, optimizer=opt, metrics=[metric_l1l2, metric_l1, metric_l2])
+            else:
+                model.compile(loss=custom_loss, optimizer=opt, metrics=['acc'])
 
-        # custom_loss = partial(w_categorical_crossentropy_none)
-        custom_loss = partial(loss, weights=weights_mat)
-        custom_loss.__name__ = 'w_categorical_crossentropy'
-        model.compile(loss=custom_loss, optimizer='adam', metrics=['acc'])
         print(model.summary())
-
         # history = LossHistory()
         print("model fit")
-        history = model.fit(X_t, y_t, validation_data=(X_v, y_v), epochs=60, verbose=0)
+        history = model.fit(X_t, y_t, validation_data=(X_v, y_v), epochs=epochs, verbose=0)
         print("model evaluate")
-        loss_train, accuracy_train = model.evaluate(X_t, y_t, verbose=0)
-        print('Accuracy train: %f' % (accuracy_train * 100))
-        loss_test, accuracy_test = model.evaluate(X_v, y_v, verbose=0)
-        print('Accuracy validation: %f' % (accuracy_test * 100))
-        # PLOT
-        plt.ylim(0.0, 1.0)
-        plt.plot(history.history['acc'])
-        plt.plot(history.history['val_acc'])
-        # plt.title('model accuracy')
-        plt.ylabel('accuracy')
-        plt.xlabel('epoch')
-        plt.title(title, pad=-80)
+        print(model.metrics_names)
+        if flag_metric == 1:
+            loss_train, accl1l2_train, accl1_train, accl2_train = model.evaluate(X_t, y_t, verbose=0)
+            print('loss_train: %f' % (loss_train * 100))
+            print('-> accl1l2_train: %f' % (accl1l2_train * 100))
+            print('accl1_train: %f' % (accl1_train * 100))
+            print('accl2_train: %f' % (accl2_train * 100))
 
-        plt.legend(['train', 'val'], loc='upper left')
-        # plt.show()
+            loss_val, accl1l2_val, accl1_val, accl2_val = model.evaluate(X_v, y_v, verbose=0)
+            print('loss_val: %f' % (loss_val * 100))
+            print('-> accl1l2_val: %f' % (accl1l2_val * 100))
+            print('accl1_val: %f' % (accl1_val * 100))
+            print('accl2_val: %f' % (accl2_val * 100))
+        else:
+            loss_train, acc_train = model.evaluate(X_t, y_t, verbose=0)
+            print('Accuracy train: %f' % (acc_train * 100))
+            loss_val, acc_val = model.evaluate(X_v, y_v, verbose=0)
+            print('Accuracy validation: %f' % (acc_val * 100))
+            # loss_val, accuracy_val = model.evaluate(X_v, y_v, verbose=0)
+            # print('Accuracy validation: %f' % (accuracy_val * 100))
+            # PLOT
+            plt.ylim(0.0, 1.0)
+            plt.plot(history.history['acc'])
+            plt.plot(history.history['val_acc'])
+            plt.ylabel('accuracy')
+            plt.xlabel('epoch')
+            plt.title(title, pad=-80)
+
+        # plt.legend(['train', 'validation'], loc='upper left')
+        # plt.show()'''
 
         ################################## test on a new sample. prediction on a SINGLE new data sequence. experiment
         sequence_test_level1 = [653, 1490, 1490, 653]
@@ -456,30 +509,51 @@ def lstm_model_categorical_data_concat():
         pred_l1 = y_predicted[0][:categories_level1]
         pred_l2 = y_predicted[0][categories_level1:]
 
-        print('Predicted level1: %s' % [pred_l1], unique_cats_level1[0])
-        print('Predicted level2: %s' % [pred_l2], unique_cats_level2[0])
+        # print('Predicted level1: %s' % [pred_l1], unique_cats_level1[0])
+        # print('Predicted level2: %s' % [pred_l2], unique_cats_level2[0])
 
         print('Predicted decoded level1: %s' % one_hot_decode([pred_l1], unique_cats_level1)[0])
         print('Predicted decoded level2: %s' % one_hot_decode([pred_l2], unique_cats_level2)[0])
 
-
-
-
-
-    losses_names = [w_categorical_crossentropy]
-    losses_titles = [
-                     'w_categorical_crossentropy W custom']
+    # losses_names = ['standard', w_categorical_crossentropy_none, w_categorical_crossentropy]
+    # losses_titles = ['standard', 'categorical crossentropy w/ tensors', 'categorical crossentropy w/ tensors and mask w/ weights all 1s']
+    # weights = ['none', 'none', w_array_dummy]
+    # flags_w = [0, 0, 1]
+    '''
+    losses_names = [w_categorical_crossentropy, w_categorical_crossentropy]
+    losses_titles = ['categorical crossentropy w/ tensors and mask w/ weights all 1s', 'categorical crossentropy w/ tensors and mask w/ custom weights']
     weights = [w_array_dummy, w_array_new]
+    flags_w = [1, 1]
     for i in range(len(losses_names)):
         # determine the plot number
         plot_no = 220 + (i + 1)
         plt.subplot(plot_no)
         # fit model and plot learning curves for an optimizer
-        build_model(X_train, y_train, X_val, y_val, losses_names[i], losses_titles[i], weights[i])
+        build_model(X_train, y_train, X_val, y_val, 30, 0, 300, 'adagrad', losses_names[i], losses_titles[i], weights[i], flags_w[i])
 
     plt.show()
+    '''
 
+    '''
+    momentums = ['sgd', 'rmsprop', 'adagrad', 'adam']
+    dropouts = [0, 0.2, 0.4, 0.6]
+    units = [10, 30, 50, 70]
+    for i in range(len(units)):
+        # determine the plot number
+        plot_no = 220 + (i + 1)
+        plot_no = 220 + (i + 1)
+        plt.subplot(plot_no)
+        # fit model and plot learning curves for an optimizer
+        #build_model(X_train, y_train, X_val, y_val, 30, 0, 100, momentums[i], w_categorical_crossentropy, momentums[i], w_array_new, 1, 0)
+    '''
+    #build_model(X_train, y_train, X_val, y_val, 30, 0, 100, 'adagrad', 'standard', 'standard categorical accuracy keras', 'none', 0, 1)
 
+    #build_model(X_train, y_train, X_val, y_val, 30, 0, 100, 'adagrad', w_categorical_crossentropy_none, 'categorical accuracy keras backend, predict both l1 and l2', 'none', 0, 1)
+
+    build_model(X_train, y_train, X_val, y_val, 30, 0, 100, 'adagrad', w_categorical_crossentropy, 'categorical accuracy keras backend, loss weights 1s', w_array_dummy, 1, 1)
+    #build_model(X_train, y_train, X_val, y_val, 30, 0, 100, 'adagrad', w_categorical_crossentropy, 'categorical accuracy keras backend, loss weights customized', w_array_new, 1, 0)
+
+    plt.show()
     ##################################
 
 
@@ -487,22 +561,23 @@ lstm_model_categorical_data_concat()
 
 
 ##### STANDARD LSTM MODEL. FIRST MODEL:
-def lstm_model_categorical_data_first():
+def lstm_model_categorical_data_first_l1():
     df_visitors_no_split = pd.read_csv(
         '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_longer_seqs.csv')
     unique_cats_level1 = list(df_visitors_no_split['level1'].unique())
     unique_cats_level1.sort()
     print(unique_cats_level1)
     print("Distinct nr of categories level1: %s" % (len(unique_cats_level1)))
+
     df_train = pd.read_csv(
         '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_train_set.csv')
     df_validation = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_val_set.csv')
-    #############
-    # train_pct_index = int(0.40 * len(df_train))
-    # df_train, df_discard_train = df_train[:train_pct_index], df_train[train_pct_index:]
-    # test_pct_index = int(0.20 * len(df_validation))
-    # df_validation, df_discard_test = df_validation[:test_pct_index], df_validation[test_pct_index:]
-    # ----
+    ############# for testing purposes (less time consuming using a smaller dataset):
+    train_pct_index = int(0.1 * len(df_train))
+    df_train, df_discard_train = df_train[:train_pct_index], df_train[train_pct_index:]
+    test_pct_index = int(0.3 * len(df_validation))
+    df_validation, df_discard_test = df_validation[:test_pct_index], df_validation[test_pct_index:]
+    ############
     df_train['sequence_cats_level1'] = [ast.literal_eval(cat_list_string) for cat_list_string in
                                         df_train['sequence_cats_level1']]
     df_validation['sequence_cats_level1'] = [ast.literal_eval(cat_list_string) for cat_list_string in
@@ -516,129 +591,401 @@ def lstm_model_categorical_data_first():
     df_validation['sequence_events'] = [ast.literal_eval(event_list_string) for event_list_string in
                                         df_validation['sequence_events']]
 
-    ############
+    X_train_level1 = df_train['sequence_cats_level1']
+    y_train_level1 = df_train['next_cat_level1']
 
-    # one hot encode sequence
-    def one_hot_encode(sequence, n_features, length):
-        encoding = []
-        i = 0
-        for value in sequence:
-            vector = [0 for _ in range(n_features)]
-            vector[unique_cats_level1.index(value)] = 1
-            encoding.append(vector)
-            i += 1
-        if i < length:  # -1 as a value chosen to ignore (mask) positions in the sequence with no values
-            for j in range(length - i):
-                encoding.append([-1 for _ in range(n_features)])
-        return encoding
-
-    # one hot encode sequence
-    def one_hot_encode_target(value, n_features):
-        vector = [0 for _ in range(n_features)]
-        vector[unique_cats_level1.index(value)] = 1
-        return vector
-
-    # decode a one hot encoded sequence
-    def one_hot_decode(encoded_seq):
-        decoded_seq = []
-        # returns index of highest probability value in array.
-        for vector in encoded_seq:
-            highest_value_index = np.argmax(vector)
-            if vector[0] != -1:
-                decoded_seq.append(unique_cats_level1[highest_value_index])
-        return decoded_seq
-
-    def one_hot_decode_target(encoded_prediction):
-        value = unique_cats_level1[encoded_prediction.index(1)]
-        return value
-
-    X_train = df_train['sequence_cats_level1']
-    y_train = df_train['next_cat_level1']
-    X_val = df_validation['sequence_cats_level1']
-    y_val = df_validation['next_cat_level1']
+    X_val_level1 = df_validation['sequence_cats_level1']
+    y_val_level1 = df_validation['next_cat_level1']
 
     categories_level1 = len(unique_cats_level1)
-    max_len = 0
-    units = 50
-    samples = X_train.shape[0]
+    timesteps = 0
+    samples = X_train_level1.shape[0]
+    samples_val = X_val_level1.shape[0]
 
-    for seq in X_train:
-        if len(seq) > max_len:
-            max_len = len(seq)
+    for current_sequence in X_train_level1:
+        if len(current_sequence) > timesteps:
+            timesteps = len(current_sequence)
 
-    samples_test = X_val.shape[0]
-    for seq in X_val:
-        if len(seq) > max_len:
-            max_len = len(seq)
+    samples_val = X_val_level1.shape[0]
+    for current_sequence in X_val_level1:
+        if len(current_sequence) > timesteps:
+            timesteps = len(current_sequence)
 
-    print("max len:")
-    print(max_len)
+    print("TIMESTEPS: " + str(timesteps))
+    print("SAMPLES train: " + str(samples))
+    print("SAMPLES val: " + str(samples_val))
 
     input_encoded_train = []
     output_encoded_train = []
-    for i in range(len(X_train)):
-        input_encoded_seq_train = one_hot_encode(X_train[i], categories_level1, max_len)
-        input_encoded_train.append(input_encoded_seq_train)
-        output_encoded_train.append(one_hot_encode_target(y_train[i], categories_level1))
+    for x in range(samples):
+        one_sequence_encoding_input = []
+        current_sequence = X_train_level1[x]
+        for v in range(len(current_sequence)):
+            value2 = X_train_level1[x][v]
+            one_sequence_encoding_input.append(
+                one_hot_encode(value2, categories_level1, unique_cats_level1))
+        if (v + 1) < timesteps:  # -1 as a value chosen to ignore (mask) positions in the sequence with no values
+            for real in range(timesteps - (v + 1)):
+                one_sequence_encoding_input.append(
+                    ([-1 for _ in range(categories_level1)]))
 
-    input_encoded_test = []
-    output_encoded_test = []
-    for j in range(len(X_val)):
-        input_encoded_seq_test = one_hot_encode(X_val[j], categories_level1, max_len)
-        input_encoded_test.append(input_encoded_seq_test)
-        output_encoded_test.append(one_hot_encode_target(y_val[j], categories_level1))
+        next_cat2 = y_train_level1[x]
+        output_encoded_train.append(
+            one_hot_encode(next_cat2, categories_level1, unique_cats_level1))
+        input_encoded_train.append(one_sequence_encoding_input)
+
+    input_encoded_val = []
+    output_encoded_val = []
+    for z in range(samples_val):
+        current_sequence = X_val_level1[z]
+        one_sequence_encoding_input = []
+        for v in range(len(current_sequence)):
+            value2 = X_val_level1[z][v]
+            one_sequence_encoding_input.append(
+                one_hot_encode(value2, categories_level1, unique_cats_level1))
+        if (v + 1) < timesteps:  # -1 as a value chosen to ignore (mask) positions in the sequence with no values
+            for real in range(timesteps - (v + 1)):
+                one_sequence_encoding_input.append(
+                    [-1 for _ in range(categories_level1)])
+        next_cat2 = y_val_level1[z]
+        output_encoded_val.append(
+            one_hot_encode(next_cat2, categories_level1, unique_cats_level1))
+        input_encoded_val.append(one_sequence_encoding_input)
 
     X_train = array(input_encoded_train)
-    print("X_train pré: " + str(X_train.shape))
-    X_train = X_train.reshape(samples, max_len, categories_level1)
-    print("X_train pós: " + str(X_train.shape))
+    X_train = X_train.reshape(samples, timesteps, categories_level1)
     y_train = array(output_encoded_train)
-    print("y_train shape:" + str(y_train.shape))
+    X_val = array(input_encoded_val)
+    X_val = X_val.reshape(samples_val, timesteps, categories_level1)
+    y_val = array(output_encoded_val)
 
-    X_val = array(input_encoded_test)
-    X_val = X_val.reshape(samples_test, max_len, categories_level1)
-    y_val = array(output_encoded_test)
+    ################################        Loss Function Customization - Function Construction:
+    def w_categorical_crossentropy_none(y_true, y_pred):
+        cross_ent = K.categorical_crossentropy(y_true, y_pred, from_logits=True)
+        return cross_ent
 
-    dropout = 0.4
-    model = Sequential()
-    model.add(Masking(mask_value=-1, input_shape=(max_len, categories_level1)))
-    model.add(LSTM(units, input_shape=(max_len, categories_level1), dropout=dropout,
-                   return_sequences=False))  # units-> random number. trial and error methodology.
-    model.add(Dense(categories_level1, activation='softmax'))
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['acc'])
-    print(model.summary())
+    ################################       Loss Function Customization - Weights Matrices
+    ## A) dummy weigths matrix construction. Matrix w/ all 1s. All categories relationships w/ the same importance:
+    w_array_dummy = np.ones((categories_level1, categories_level1))
 
-    # fit the model
-    model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=50, verbose=0)
-    # evaluate the model
-    loss_train, accuracy_train = model.evaluate(X_train, y_train, verbose=0)
-    print('Accuracy train: %f' % (accuracy_train * 100))
-    loss_test, accuracy_test = model.evaluate(X_val, y_val, verbose=0)
-    print('Accuracy validation: %f' % (accuracy_test * 100))
+    print("weights matrix constructed.")
 
-    # prediction on a SINGLE new data sequence. experiment
-    sequence_test = [653, 653, 1490, 1490, 653]
-    X_test_new = []
-    encoded_seq_level1 = one_hot_encode(sequence_test, categories_level1, max_len)
-    X_test_new.append(encoded_seq_level1)
-    X_test_new = array(X_test_new)
-    print(X_test_new.shape)
-    y_test_new = 1698
-    y_predicted = model.predict(X_test_new)
-    print("*****************")
-    # print(X_test_new)
+    ################################    LSTM Model:
+    def build_model(X_t, y_t, X_v, y_v, units, dropout, epochs, opt, loss, title, weights_mat, flag_weight):
 
-    for value in X_test_new:
-        print(value)
-        print("+++++++++++++++")
-        print(one_hot_decode(value))
-    # print('Sequence: %s' % [one_hot_decode(x) for x in X_test_new])
+        print("MODEL " + str(title))
+        units = units
+        dropout = dropout
+        model = Sequential()
+        model.add(Masking(mask_value=-1, input_shape=(timesteps, categories_level1)))
+        model.add(LSTM(units, input_shape=(timesteps, categories_level1), dropout=dropout,
+                       return_sequences=False))  # units-> random number. trial and error methodology.
+        model.add(Dense(categories_level1, activation='softmax'))
+        if loss == 'standard':
+            model.compile(loss='categorical_crossentropy', optimizer=opt,
+                          metrics=['acc'])
+        else:
+            if flag_weight == 1:
+                custom_loss = partial(loss, weights=weights_mat)
+            else:
+                custom_loss = partial(loss)
+            custom_loss.__name__ = 'w_categorical_crossentropy'
+            model.compile(loss=custom_loss, optimizer=opt, metrics=['acc'])
+        print(model.summary())
+        # history = LossHistory()
+        print("model fit")
+        history = model.fit(X_t, y_t, validation_data=(X_v, y_v), epochs=epochs, verbose=0)
+        print("model evaluate")
+        print(model.metrics_names)
 
-    print(y_predicted)
+        loss_train, accuracy_train = model.evaluate(X_v, y_v, verbose=0)
+        print('Accuracy train: %f' % (accuracy_train * 100))
+        loss_val, accuracy_val = model.evaluate(X_v, y_v, verbose=0)
+        print('Accuracy validation: %f' % (accuracy_val * 100))
+
+        # PLOT
+        plt.ylim(0.0, 1.0)
+        plt.plot(history.history['acc'])
+        plt.plot(history.history['val_acc'])
+        plt.ylabel('accuracy')
+        plt.xlabel('epoch')
+        plt.title(opt, pad=-80)
+
+        # plt.legend(['train', 'validation'], loc='upper left')
+        # plt.show()'''
+
+        ################################## test on a new sample. prediction on a SINGLE new data sequence. experiment
+        sequence_test_level2 = [653, 1490, 1490, 653]
+        encoded_test_seq_input = []
+        for pred in range(len(sequence_test_level2)):
+            v2 = sequence_test_level2[pred]
+            encoded_test_seq_input.append(
+                one_hot_encode(v2, categories_level1, unique_cats_level1))
+
+        if (pred + 1) < timesteps:  # -1 as a value chosen to ignore (mask) positions in the sequence with no values
+            for true in range(timesteps - (pred + 1)):
+                encoded_test_seq_input.append((
+                    [-1 for _ in range(categories_level1)]))
+
+        X_test_sample = [encoded_test_seq_input]
+        X_test_sample = array(X_test_sample)
+        # print(X_test_sample.shape)
+
+        y_test_real_level1 = 653
+
+        y_predicted = model.predict(X_test_sample)
+        encoded_test_l1 = []
+        for position_seq in X_test_sample[0]:
+            encoded_complete_value = position_seq
+            encoded_value_level1 = encoded_complete_value[:]
+            encoded_test_l1.append(encoded_value_level1.tolist())
+
+        decoded_value_level1= one_hot_decode(encoded_test_l1, unique_cats_level1)
+        print("Sequence level2: %s" % decoded_value_level1)
+        print('Expected level2: %s' % y_test_real_level1)
+
+        pred_l1 = y_predicted[0][:]
+
+        # print('Predicted level2: %s' % [pred_l2], unique_cats_level2[0])
+
+        print('Predicted decoded level2: %s' % one_hot_decode([pred_l1], unique_cats_level1)[0])
+
+    momentums = ['sgd', 'rmsprop', 'adagrad', 'adam']
+    dropouts = [0, 0.2, 0.4, 0.6]
+    units = [10, 30, 50, 70]
+    for i in range(len(units)):
+        # determine the plot number
+        plot_no = 220 + (i + 1)
+        plot_no = 220 + (i + 1)
+        plt.subplot(plot_no)
+        # fit model and plot learning curves for an optimizer
+        build_model(X_train, y_train, X_val, y_val, 30, 0, 100, momentums[i], 'standard',
+                    momentums[i], 'none', 0)
+
+    # build_model(X_train, y_train, X_val, y_val, 30, 0, 100, 'adagrad', 'standard', 'standard categorical accuracy keras', 'none', 0)
+    # build_model(X_train, y_train, X_val, y_val, 30, 0, 100, 'adagrad', w_categorical_crossentropy_none, 'categorical accuracy keras backend, predict l2', 'none', 0)
+
+    plt.show()
+
 
 # print('Sequence: %s' % [one_hot_decode(X_test_new[0][i]) for i in range(len(X_test_new))])
 # print('Expected: %s' % y_test_new)
 # print('Predicted: %s' % one_hot_decode(y_predicted))
 
 
-# lstm_model_categorical_data_first()
+#lstm_model_categorical_data_first_l1()
+
+def lstm_model_categorical_data_first_l2():
+    df_visitors_no_split = pd.read_csv(
+        '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_longer_seqs.csv')
+    unique_cats_level1 = list(df_visitors_no_split['level1'].unique())
+    unique_cats_level1.sort()
+    # print(unique_cats_level1)
+    # print("Distinct nr of categories level1: %s" % (len(unique_cats_level1)))
+    unique_cats_level2 = list(df_visitors_no_split['level2'].unique())
+    unique_cats_level2.sort()
+    # print(unique_cats_level2)
+    # print("Distinct nr of categories level2: %s" % (len(unique_cats_level2)))
+
+    df_train = pd.read_csv(
+        '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_train_set.csv')
+    df_validation = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_val_set.csv')
+    ############# for testing purposes (less time consuming using a smaller dataset):
+    train_pct_index = int(0.1 * len(df_train))
+    df_train, df_discard_train = df_train[:train_pct_index], df_train[train_pct_index:]
+    test_pct_index = int(0.3 * len(df_validation))
+    df_validation, df_discard_test = df_validation[:test_pct_index], df_validation[test_pct_index:]
+    ############
+    df_train['sequence_cats_level1'] = [ast.literal_eval(cat_list_string) for cat_list_string in
+                                        df_train['sequence_cats_level1']]
+    df_validation['sequence_cats_level1'] = [ast.literal_eval(cat_list_string) for cat_list_string in
+                                             df_validation['sequence_cats_level1']]
+    df_train['sequence_cats_level2'] = [ast.literal_eval(cat_list_string) for cat_list_string in
+                                        df_train['sequence_cats_level2']]
+    df_validation['sequence_cats_level2'] = [ast.literal_eval(cat_list_string) for cat_list_string in
+                                             df_validation['sequence_cats_level2']]
+    df_train['sequence_events'] = [ast.literal_eval(event_list_string) for event_list_string in
+                                   df_train['sequence_events']]
+    df_validation['sequence_events'] = [ast.literal_eval(event_list_string) for event_list_string in
+                                        df_validation['sequence_events']]
+
+    X_train_level2 = df_train['sequence_cats_level2']
+    y_train_level2 = df_train['next_cat_level2']
+
+    X_val_level2 = df_validation['sequence_cats_level2']
+    y_val_level2 = df_validation['next_cat_level2']
+
+    categories_level2 = len(unique_cats_level2)
+    timesteps = 0
+    samples = X_train_level2.shape[0]
+    samples_val = X_val_level2.shape[0]
+
+    for current_sequence in X_train_level2:
+        if len(current_sequence) > timesteps:
+            timesteps = len(current_sequence)
+
+    samples_val = X_val_level2.shape[0]
+    for current_sequence in X_val_level2:
+        if len(current_sequence) > timesteps:
+            timesteps = len(current_sequence)
+
+    print("TIMESTEPS: " + str(timesteps))
+    print("SAMPLES train: " + str(samples))
+    print("SAMPLES val: " + str(samples_val))
+
+    input_encoded_train = []
+    output_encoded_train = []
+    for x in range(samples):
+        one_sequence_encoding_input = []
+        current_sequence = X_train_level2[x]
+        for v in range(len(current_sequence)):
+            value2 = X_train_level2[x][v]
+            one_sequence_encoding_input.append(
+                one_hot_encode(value2, categories_level2, unique_cats_level2))
+        if (v + 1) < timesteps:  # -1 as a value chosen to ignore (mask) positions in the sequence with no values
+            for real in range(timesteps - (v + 1)):
+                one_sequence_encoding_input.append(
+                    ([-1 for _ in range(categories_level2)]))
+
+        next_cat2 = y_train_level2[x]
+        output_encoded_train.append(
+            one_hot_encode(next_cat2, categories_level2, unique_cats_level2))
+        input_encoded_train.append(one_sequence_encoding_input)
+
+    input_encoded_val = []
+    output_encoded_val = []
+    for z in range(samples_val):
+        current_sequence = X_val_level2[z]
+        one_sequence_encoding_input = []
+        for v in range(len(current_sequence)):
+            value2 = X_val_level2[z][v]
+            one_sequence_encoding_input.append(
+                one_hot_encode(value2, categories_level2, unique_cats_level2))
+        if (v + 1) < timesteps:  # -1 as a value chosen to ignore (mask) positions in the sequence with no values
+            for real in range(timesteps - (v + 1)):
+                one_sequence_encoding_input.append(
+                    [-1 for _ in range(categories_level2)])
+        next_cat2 = y_val_level2[z]
+        output_encoded_val.append(
+            one_hot_encode(next_cat2, categories_level2, unique_cats_level2))
+        input_encoded_val.append(one_sequence_encoding_input)
+
+    X_train = array(input_encoded_train)
+    X_train = X_train.reshape(samples, timesteps, categories_level2)
+    y_train = array(output_encoded_train)
+    X_val = array(input_encoded_val)
+    X_val = X_val.reshape(samples_val, timesteps, categories_level2)
+    y_val = array(output_encoded_val)
+
+    ################################        Loss Function Customization - Function Construction:
+    def w_categorical_crossentropy_none(y_true, y_pred):
+        cross_ent = K.categorical_crossentropy(y_true, y_pred, from_logits=True)
+        return cross_ent
+
+    ################################       Loss Function Customization - Weights Matrices
+    ## A) dummy weigths matrix construction. Matrix w/ all 1s. All categories relationships w/ the same importance:
+    w_array_dummy = np.ones((categories_level2, categories_level2))
+
+    print("weights matrix constructed.")
+
+    ################################    LSTM Model:
+    def build_model(X_t, y_t, X_v, y_v, units, dropout, epochs, opt, loss, title, weights_mat, flag_weight):
+
+        print("MODEL " + str(title))
+        units = units
+        dropout = dropout
+        model = Sequential()
+        model.add(Masking(mask_value=-1, input_shape=(timesteps, categories_level2)))
+        model.add(LSTM(units, input_shape=(timesteps, categories_level2), dropout=dropout,
+                       return_sequences=False))  # units-> random number. trial and error methodology.
+        model.add(Dense(categories_level2, activation='softmax'))
+        if loss == 'standard':
+            model.compile(loss='categorical_crossentropy', optimizer=opt,
+                          metrics=['acc'])
+        else:
+            if flag_weight == 1:
+                custom_loss = partial(loss, weights=weights_mat)
+            else:
+                custom_loss = partial(loss)
+            custom_loss.__name__ = 'w_categorical_crossentropy'
+            model.compile(loss=custom_loss, optimizer=opt, metrics=['acc'])
+        print(model.summary())
+        # history = LossHistory()
+        print("model fit")
+        history = model.fit(X_t, y_t, validation_data=(X_v, y_v), epochs=epochs, verbose=0)
+        print("model evaluate")
+        print(model.metrics_names)
+
+        loss_train, accuracy_train = model.evaluate(X_v, y_v, verbose=0)
+        print('Accuracy train: %f' % (accuracy_train * 100))
+        loss_val, accuracy_val = model.evaluate(X_v, y_v, verbose=0)
+        print('Accuracy validation: %f' % (accuracy_val * 100))
+
+        # PLOT
+        plt.ylim(0.0, 1.0)
+        plt.plot(history.history['acc'])
+        plt.plot(history.history['val_acc'])
+        plt.ylabel('accuracy')
+        plt.xlabel('epoch')
+        plt.title(opt, pad=-80)
+
+        # plt.legend(['train', 'validation'], loc='upper left')
+        # plt.show()'''
+
+        ################################## test on a new sample. prediction on a SINGLE new data sequence. experiment
+        sequence_test_level2 = [312, 145, 798, 92]
+        encoded_test_seq_input = []
+        for pred in range(len(sequence_test_level2)):
+            v2 = sequence_test_level2[pred]
+            encoded_test_seq_input.append(
+                one_hot_encode(v2, categories_level2, unique_cats_level2))
+
+        if (pred + 1) < timesteps:  # -1 as a value chosen to ignore (mask) positions in the sequence with no values
+            for true in range(timesteps - (pred + 1)):
+                encoded_test_seq_input.append((
+                    [-1 for _ in range(categories_level2)]))
+
+        X_test_sample = [encoded_test_seq_input]
+        X_test_sample = array(X_test_sample)
+        # print(X_test_sample.shape)
+
+        y_test_real_level2 = 312
+
+        y_predicted = model.predict(X_test_sample)
+        encoded_test_l2 = []
+        for position_seq in X_test_sample[0]:
+            encoded_complete_value = position_seq
+            encoded_value_level2 = encoded_complete_value[:]
+            encoded_test_l2.append(encoded_value_level2.tolist())
+
+        decoded_value_level2 = one_hot_decode(encoded_test_l2, unique_cats_level2)
+        print("Sequence level2: %s" % decoded_value_level2)
+        print('Expected level2: %s' % y_test_real_level2)
+
+        pred_l2 = y_predicted[0][:]
+
+        # print('Predicted level2: %s' % [pred_l2], unique_cats_level2[0])
+
+        print('Predicted decoded level2: %s' % one_hot_decode([pred_l2], unique_cats_level2)[0])
+
+
+
+    momentums = ['sgd', 'rmsprop', 'adagrad', 'adam']
+    dropouts = [0, 0.2, 0.4, 0.6]
+    units = [10, 30, 50, 70]
+    for i in range(len(units)):
+        # determine the plot number
+        plot_no = 220 + (i + 1)
+        plot_no = 220 + (i + 1)
+        plt.subplot(plot_no)
+        # fit model and plot learning curves for an optimizer
+        build_model(X_train, y_train, X_val, y_val, 30, 0, 100, momentums[i], 'standard', momentums[i], 'none', 0)
+
+    # build_model(X_train, y_train, X_val, y_val, 30, 0, 100, 'adagrad', 'standard', 'standard categorical accuracy keras', 'none', 0)
+    #build_model(X_train, y_train, X_val, y_val, 30, 0, 100, 'adagrad', w_categorical_crossentropy_none, 'categorical accuracy keras backend, predict l2', 'none', 0)
+
+    plt.show()
+    ##################################
+
+
+#lstm_model_categorical_data_first_l2()

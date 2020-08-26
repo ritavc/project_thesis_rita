@@ -348,7 +348,7 @@ def rnn_model_categorical_data_concat():
     custom_loss = partial(w_categorical_crossentropy_none_2)
     custom_loss.__name__ = 'w_categorical_crossentropy'
 
-    ################################    LSTM Model:
+    ################################    RNN Model:
 
     dropout = 0
     model = Sequential()
@@ -356,12 +356,12 @@ def rnn_model_categorical_data_concat():
     model.add(SimpleRNN(units, input_shape=(timesteps, (categories_level1 + categories_level2)), dropout=dropout,
                         return_sequences=False))  # units-> random number. trial and error methodology.
     model.add(Dense((categories_level1 + categories_level2), activation='softmax'))
-    #model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['acc'])
-    model.compile(loss=custom_loss, optimizer='adam', metrics=['acc'])
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['acc'])
+    #model.compile(loss=custom_loss, optimizer='adam', metrics=['acc'])
     print(model.summary())
     # history = LossHistory()
     print("model fit")
-    model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=40, verbose=0)
+    model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=100, verbose=0)
     print("model evaluate")
     loss_train, accuracy_train = model.evaluate(X_train, y_train, verbose=0)
     print('Accuracy train: %f' % (accuracy_train * 100))
@@ -585,18 +585,18 @@ def rnn_model_categorical_data_first():
 
         plt.legend(['train', 'val'], loc='upper left')
         # plt.show()
-
+    '''
     momentums = ['sgd', 'rmsprop', 'adagrad', 'adam']
     dropouts = [0, 0.2, 0.4, 0.6]
     units = [10, 30, 50, 70]
-    '''for i in range(len(units)):
+    for i in range(len(units)):
         # determine the plot number
         plot_no = 220 + (i + 1)
         plt.subplot(plot_no)
         # fit model and plot learning curves for an optimizer
-        build_model(X_train, y_train, X_val, y_val, 30, 0, 'adam', 50)
+        build_model(X_train, y_train, X_val, y_val, 60, 0, 'adam', 100)
     # show learning curves'''
-    build_model(X_train, y_train, X_val, y_val, 30, 0, 'adam', 40)
+    build_model(X_train, y_train, X_val, y_val, 60, 0, 'adam', 100)
     plt.show()
 # print('Sequence: %s' % [one_hot_decode(X_test_new[0][i]) for i in range(len(X_test_new))])
 # print('Expected: %s' % y_test_new)
