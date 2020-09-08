@@ -312,11 +312,14 @@ def dataset_split_by_users():
     # X_train, X_test = X[:train_pct_index], X[train_pct_index:]
     # y_train, y_test = y[:train_pct_index], y[train_pct_index:]
     unique_visitors = df_visitors['visitorid'].unique()
-    train_val_division_index = int(0.60 * len(unique_visitors))
+    train_val_division_index = int(0.30 * len(unique_visitors)) #### -> modification here.
     unique_train, unique_val_temp = unique_visitors[:train_val_division_index], unique_visitors[
                                                                                 train_val_division_index:]
-    val_test_division_index = int(0.85 * len(unique_val_temp))
-    unique_val, unique_test = unique_val_temp[:val_test_division_index], unique_val_temp[val_test_division_index:]
+    val_test_division_index = int(0.70 * len(unique_val_temp))
+    unique_val, unique_test_temp = unique_val_temp[:val_test_division_index], unique_val_temp[val_test_division_index:]
+
+    test_division_index = int(0.50 * len(unique_test_temp))
+    unique_test, nothing = unique_test_temp[:test_division_index], unique_test_temp[test_division_index:]
 
     df_train = df_visitors[df_visitors['visitorid'].isin(unique_train)]
     df_val = df_visitors[df_visitors['visitorid'].isin(unique_val)]
@@ -358,7 +361,7 @@ def dataset_split_by_users():
     df_test.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/test_set.csv', index=False)
 
 
-# dataset_split_by_users()
+dataset_split_by_users()
 
 
 ## function to shift the dataset in order to be in the form: per row, X sequence of categories (taken from each event) and y next real category
@@ -582,8 +585,8 @@ def prepare_dataset_seqs_target_moving_window():
         "- nr of sequences where elem to predict is equal to the last one, considering l1: %s; proportion = %.f" % (next_last_same_l2_train, (100*next_last_same_l2_train/df_train.shape[0])))
     df_train_new = pd.DataFrame(data_train)
     print(df_train_new.head(20))
-    #df_train_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_train_set.csv',
-                        #index=False)
+    df_train_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_train_set.csv',
+                        index=False)
 
     df_val = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/validation_set.csv')
     df_val['event'] = df_val['event'].astype('category')
@@ -658,7 +661,7 @@ def prepare_dataset_seqs_target_moving_window():
 
     df_val_new = pd.DataFrame(data_val)
     print(df_val_new.head(20))
-    #df_val_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_val_set.csv',index=False)
+    df_val_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_val_set.csv',index=False)
 
     df_test = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/test_set.csv')
     df_test['event'] = df_test['event'].astype('category')
@@ -700,6 +703,11 @@ def prepare_dataset_seqs_target_moving_window():
 
     df_test_new = pd.DataFrame(data_test)
     print(df_test_new.head(20))
-    #df_test_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_test_set.csv', index=False)
+    df_test_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_test_set.csv', index=False)
+
+
+    print("train instances = %s" % (df_train_new.shape,))
+    print("validation instances = %s" % (df_val_new.shape,))
+    print("test instances = %s" % (df_test_new.shape,))
 
 prepare_dataset_seqs_target_moving_window()
