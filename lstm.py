@@ -65,6 +65,7 @@ def category_tree():
 
 
 general_tree_category = category_tree()
+hierarchy_aux_dict = general_tree_category[0]
 
 
 def category_tree_to_get_parent(level_2_category):
@@ -98,6 +99,18 @@ def one_hot_decode(encoded_seq, unique_cats):
     decoded_seq = []
     # returns index of highest probability value in array.
     for vector in encoded_seq:
+        # print(vector)
+        highest_value_index = np.argmax(vector)
+        if vector[0] != -1:
+            decoded_seq.append(unique_cats[highest_value_index])
+    return decoded_seq
+
+
+# decode a one hot encoded sequence
+def decode_family(encoded_seq, unique_cats):
+    decoded_seq = []
+    # returns index of highest probability value in array.
+    for vector in encoded_seq:
         highest_value_index = np.argmax(vector)
         if vector[0] != -1:
             decoded_seq.append(unique_cats[highest_value_index])
@@ -112,18 +125,24 @@ def one_hot_decode_target(encoded_prediction, unique_cats):
 def lstm_model_categorical_data_concat():
     unique_cats_level2 = list(itertools.chain.from_iterable(general_tree_category[1].values()))
     unique_cats_level2.sort()
-    print(unique_cats_level2)
     print("Distinct nr of categories level2: %s" % (len(unique_cats_level2)))
 
     df_train = pd.read_csv(
         '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_train_set.csv')
+    # df_train = df_train.loc[(df_train.visitorid == 404403)]
+    # df_train = df_train.iloc[15:65]
+
+    # '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_train_set_temp.csv')
     df_validation = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_val_set.csv')
     ############# for testing purposes (less time consuming using a smaller dataset):
-    train_pct_index = int(0.1 * len(df_train))
-    df_train, df_discard_train = df_train[:train_pct_index], df_train[train_pct_index:]
-    test_pct_index = int(0.3 * len(df_validation))
-    df_validation, df_discard_test = df_validation[:test_pct_index], df_validation[test_pct_index:]
+    # train_pct_index = int(0.1 * len(df_train))
+    # df_train, df_discard_train = df_train[:train_pct_index], df_train[train_pct_index:]
+    # test_pct_index = int(0.1 * len(df_validation))
+    # df_validation, df_discard_test = df_validation[:test_pct_index], df_validation[test_pct_index:]
     ############
+    indexes_train = df_train.index.values
+    indexes_validation = df_validation.index.values
+
     df_train['sequence_cats_level1'] = [ast.literal_eval(cat_list_string) for cat_list_string in
                                         df_train['sequence_cats_level1']]
     df_validation['sequence_cats_level1'] = [ast.literal_eval(cat_list_string) for cat_list_string in
@@ -147,6 +166,7 @@ def lstm_model_categorical_data_concat():
     events_unique = 3
     timesteps = 0
     samples = X_train_level2.shape[0]
+    print(X_train_level2.shape)
     samples_val = X_train_level2.shape[0]
 
     for current_sequence in X_train_level2:
@@ -164,13 +184,12 @@ def lstm_model_categorical_data_concat():
 
     input_encoded_train = []
     output_encoded_train = []
-    for x in range(samples):
+    for x in indexes_train:
         one_sequence_encoding_input = []
-        current_sequence = X_train_level2[x]
-        for v in range(len(current_sequence)):
-            # value1 = X_train_level1[x][v]
+        curr_sequence = X_train_level2[x]
+        for v in range(len(curr_sequence)):
             value2 = X_train_level2[x][v]
-            one_sequence_encoding_input.append(  # (one_hot_encode(value1, categories_level1, unique_cats_level1) +
+            one_sequence_encoding_input.append(
                 siblings_encoded_array(category_tree_to_get_siblings(value2), categories_level2, unique_cats_level2)
                 + one_hot_encode(value2, categories_level2, unique_cats_level2))
         if (v + 1) < timesteps:  # -1 as a value chosen to ignore (mask) positions in the sequence with no values
@@ -178,17 +197,16 @@ def lstm_model_categorical_data_concat():
                 one_sequence_encoding_input.append((([-1 for _ in range(categories_level2)]) +
                                                     ([-1 for _ in range(categories_level2)])))
 
-        # next_cat1 = y_train_level1[x]
         next_cat2 = y_train_level2[x]
 
-        output_encoded_train.append(  # (one_hot_encode(next_cat1, categories_level1, unique_cats_level1) +
+        output_encoded_train.append(
             siblings_encoded_array(category_tree_to_get_siblings(next_cat2), categories_level2, unique_cats_level2) +
             one_hot_encode(next_cat2, categories_level2, unique_cats_level2))
         input_encoded_train.append(one_sequence_encoding_input)
 
     input_encoded_val = []
     output_encoded_val = []
-    for z in range(samples_val):
+    for z in indexes_validation:
         current_sequence = X_val_level2[z]
         one_sequence_encoding_input = []
         for v in range(len(current_sequence)):
@@ -201,9 +219,8 @@ def lstm_model_categorical_data_concat():
             for real in range(timesteps - (v + 1)):
                 one_sequence_encoding_input.append(([-1 for _ in range(categories_level2)] +
                                                     [-1 for _ in range(categories_level2)]))
-        # next_cat1 = y_val_level1[z]
         next_cat2 = y_val_level2[z]
-        output_encoded_val.append(  # (one_hot_encode(next_cat1, categories_level1, unique_cats_level1) +
+        output_encoded_val.append(
             siblings_encoded_array(category_tree_to_get_siblings(next_cat2), categories_level2, unique_cats_level2) +
             one_hot_encode(next_cat2, categories_level2, unique_cats_level2))
         input_encoded_val.append(one_sequence_encoding_input)
@@ -217,11 +234,6 @@ def lstm_model_categorical_data_concat():
 
     ################################ Evaluation metrics customization
 
-    def categorical_accuracy_l1l2(y_true, y_pred):
-        return K.cast(K.equal(K.argmax(y_true, axis=-1),
-                              K.argmax(y_pred, axis=-1)),
-                      K.floatx())
-
     def categorical_accuracy_l2(y_true, y_pred):
         return K.cast(K.equal(K.argmax(y_true[:, categories_level2:], axis=-1),
                               K.argmax(y_pred[:, categories_level2:], axis=-1)),
@@ -229,62 +241,49 @@ def lstm_model_categorical_data_concat():
 
     ################################        Loss Function Customization - Function Construction:
 
-    def w_categorical_crossentropy_levels_relations(y_true, y_pred):
-        l2_y_true = K.argmax(y_true[:, categories_level2:], axis=1) #gets the index of the max value category in the 1-hot encoded array of levels2 categories. for each y_pred dataset sample
-        l2_y_pred = K.argmax(y_pred[:, categories_level2:], axis=1) #gets the index of the maximum prob category l2 predicted, in the 1-hot encoded array of levels2 categories. for each y_pred dataset sample
-        family_l2_pred = y_pred[:, :categories_level2] #gets the array 'family of siblings' for each y_pred dataset sample
-        family_l2_true = y_true[:, :categories_level2] #gets the array 'family of siblings' for each y_true dataset sample
+    def matrix_relations_construction():
+        mat = np.zeros((categories_level2, categories_level2))
+        for pred in range(categories_level2):
+            for true in range(categories_level2):
+                parent_pred = hierarchy_aux_dict[unique_cats_level2[pred]]
+                parent_true = hierarchy_aux_dict[unique_cats_level2[true]]
+                if parent_pred == parent_true:
+                    mat[true, pred] = 1
+                    mat[pred, true] = 1
+        return mat
 
-        # is the predicted category l2 value a sibling of category l2 true?
-        condition_siblings = K.equal(tf.gather(family_l2_true, l2_y_pred, axis=1), K.constant(1))
-        # for each data instance, it returns a boolean array w/ all False values, and if the position of family_l2_true[l2_y_pred] is positive that one has value True.
+    def loss_function(matrix):
+        matrix = tf.constant(matrix, np.float32)
+        matrix_ones = np.ones((categories_level2, categories_level2))
+        matrix_ones = tf.convert_to_tensor(matrix_ones, np.float32)
+        print(matrix)
 
-        #print(tf.gather(family_l2_true, l2_y_pred, axis=1))
-        #print(condition_siblings)
+        def loss(y_true, y_pred):
+            print(y_true[:, categories_level2:])
+            print(y_pred[:, categories_level2:])
 
-        condition_siblings = tf.reduce_any(condition_siblings, axis=1)
-        # for each data instance, if there is a True value in the boolean array, that whole data instance is signaled as True
+            l2_y_true = K.argmax(y_true[:, categories_level2:],
+                                 axis=1)  # gets the index of the max value category in the 1-hot encoded array of levels2 categories. for each y_pred dataset sample
+            print(l2_y_true)
+            l2_y_pred = K.argmax(y_pred[:, categories_level2:],
+                                 axis=1)  # gets the index of the maximum prob category l2 predicted, in the 1-hot encoded array of levels2 categories. for each y_pred dataset sample
+            print(l2_y_pred)
 
-        #print(condition_siblings)
+            gather_mat = tf.gather_nd(matrix, tf.stack((l2_y_true, l2_y_pred), -1))
+            print(gather_mat)
 
-        '''condition_bothl2 = K.not_equal(l2_y_true, l2_y_pred)
-        print(condition_bothl2)
-        cond = K.equal(condition_siblings, condition_bothl2)
-        print(cond)'''
+            cond = K.equal(gather_mat, K.constant(1))
+            # K.equal(tf.gather_nd(matrix, [0, 1]), K.constant(1)) teste básico. tudo ok.
+            return K.switch(cond,
+                            # if the predicted l2 category is a sibling of the true l2 category -> turn the loss value lower by multiplying it by 0.1
+                            lambda: K.categorical_crossentropy(y_true[:, categories_level2:],
+                                                               y_pred[:, categories_level2:],
+                                                               from_logits=False) * 0.1,
+                            lambda: K.categorical_crossentropy(y_true[:, categories_level2:],
+                                                               y_pred[:, categories_level2:],
+                                                               from_logits=False))
 
-        return K.switch(condition_siblings,
-                        # when that data instance has a True value...
-                        lambda: K.categorical_crossentropy(y_true[:, categories_level2:],
-                                                           y_pred[:, categories_level2:],
-                                                           from_logits=False) * 0.1,
-                        # if the predicted l2 category is a sibling of the true l2 category -> turn the loss value lower by multiplying it by 0.1
-                        lambda: K.categorical_crossentropy(y_true[:, categories_level2:],
-                                                           y_pred[:, categories_level2:],
-                                                           from_logits=False) * 0.9)
-
-    '''
-    def w_categorical_crossentropy_levels(y_true, y_pred):
-        parent_l1_y_true = K.argmax(y_true[:, :categories_level1],
-                                    axis=1)
-        parent_l1_y_pred = K.argmax(y_pred[:, :categories_level1],
-                                    axis=1)
-        child_l2_y_true = K.argmax(y_true[:, categories_level1:],
-                                   axis=1)
-        child_l2_y_pred = K.argmax(y_pred[:, categories_level1:],
-                                   axis=1)
-
-        condition_parents = K.equal(parent_l1_y_true,
-                                    parent_l1_y_pred)  # do the positions containing the maximum value (in the one-hot encoded level1 arrays) coincide in both predicted and truth arrays?
-        return K.switch(condition_parents,
-                        lambda: K.categorical_crossentropy(y_true[:, categories_level1:],
-                                                           y_pred[:, categories_level1:],
-                                                           from_logits=False) * 0.1,
-                        # if the parents are the same, get the loss value lower
-                        lambda: K.categorical_crossentropy(y_true[:, categories_level1:],
-                                                           y_pred[:, categories_level1:],
-                                                           from_logits=False))
-        # return K.categorical_crossentropy(y_true[:, categories_level1:], y_pred[:, categories_level1:], from_logits=False)
-    '''
+        return loss
 
     def w_categorical_crossentropy_l2(y_true, y_pred):
         cross_ent = K.categorical_crossentropy(y_true[:, categories_level2:], y_pred[:, categories_level2:],
@@ -302,14 +301,19 @@ def lstm_model_categorical_data_concat():
         model.add(LSTM(units, input_shape=(timesteps, (categories_level2 + categories_level2)), dropout=dropout,
                        return_sequences=False))  # units-> random number. trial and error methodology.
         model.add(Dense((categories_level2 + categories_level2), activation='softmax'))
-        if loss != 'standard':
-            custom_loss = partial(loss)
-            custom_loss.__name__ = 'w_categorical_crossentropy'
-            model.compile(loss=custom_loss, optimizer=opt, metrics=[categorical_accuracy_l2])
-        else:
-            model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=[categorical_accuracy_l2])
 
-        #tensorboard = TensorBoard(log_dir='logs/{}'.format(time()))
+        array_dummy = np.zeros((categories_level2, categories_level2))  # no relationships between categories here
+        matrix_siblings_relations = matrix_relations_construction()
+        if loss != 'standard':
+            model.compile(loss=loss_function(matrix_siblings_relations), optimizer=opt,
+                          metrics=[categorical_accuracy_l2])
+        else:
+            custom_loss = partial(w_categorical_crossentropy_l2)
+            custom_loss.__name__ = 'w_categorical_crossentropy'
+            model.compile(loss=custom_loss, optimizer=opt,
+                          metrics=[categorical_accuracy_l2])
+
+        # tensorboard = TensorBoard(log_dir='logs/{}'.format(time()))
         print(model.summary())
         print("model fit")
         history = model.fit(X_t, y_t, validation_data=(X_v, y_v), epochs=epochs, verbose=0)
@@ -320,18 +324,81 @@ def lstm_model_categorical_data_concat():
         print('acc_train: %f' % (acc_train * 100))
 
         loss_val, acc_val = model.evaluate(X_v, y_v, verbose=0)
-        # print('loss_val: %f' % (loss_val * 100))
+        #print('loss_val: %f' % (loss_val * 100))
         print('acc_val: %f' % (acc_val * 100))
 
-        #plt.plot(history.history['categorical_accuracy_l2'])
-        #plt.show()
+        # plt.plot(history.history['categorical_accuracy_l2']) #history verificar se aqui nao é devolvido validation acc tbm.
+        # plt.show()
+        '''
+        ################################## experiments
+        X_test_l2 = df_train.loc[(df_train.visitorid == 404403)]
+        X_test = X_test_l2['sequence_cats_level2']
+        y_test = X_test['next_cat_level2']
+        testing_samples_sequences = X_test  # X_train_level2
+        testing_samples_next_category = y_test  # y_train_level2
+        gotten_right = 0
+        gotten_wrong = 0
+        for i in range(len(testing_samples_sequences)):
+            sample_sequence = testing_samples_sequences.iloc[i]
+            encoded_test_seq_input = []
+            for pred in range(len(sample_sequence)):
+                v2 = sample_sequence[pred]
+                encoded_test_seq_input.append(
+                    siblings_encoded_array(category_tree_to_get_siblings(v2), categories_level2, unique_cats_level2) +
+                    one_hot_encode(v2, categories_level2, unique_cats_level2))
 
-    build_model(X_train, y_train, X_val, y_val, 30, 0.2, 150, 'adagrad', w_categorical_crossentropy_l2, 'categorical crossentropy keras backend, predict l2')
-    build_model(X_train, y_train, X_val, y_val, 30, 0.2, 150, 'adagrad', w_categorical_crossentropy_levels_relations, 'custom categorical crossentropy keras backend, predict l2')
+            if (pred + 1) < timesteps:  # -1 as a value chosen to ignore (mask) positions in the sequence with no values
+                for true in range(timesteps - (pred + 1)):
+                    encoded_test_seq_input.append(([-1 for _ in range(categories_level2)] +
+                                                   [-1 for _ in range(categories_level2)]))
+
+            X_test_sample = [encoded_test_seq_input]
+            X_test_sample = array(X_test_sample)
+            # print(X_test_sample.shape)
+
+            y_test_real_level2 = testing_samples_next_category.iloc[i]
+
+            y_predicted = model.predict(X_test_sample)
+            encoded_test_l2 = []
+            encoded_test_family_l2 = []
+            for position_seq in X_test_sample[0]:
+                encoded_complete_value = position_seq
+                encoded_family_level2 = encoded_complete_value[:categories_level2]
+                encoded_test_family_l2.append(encoded_family_level2.tolist())
+                encoded_value_level2 = encoded_complete_value[categories_level2:]
+                encoded_test_l2.append(encoded_value_level2.tolist())
+
+            decoded_value_level2 = one_hot_decode(encoded_test_l2, unique_cats_level2)
+            print("----")
+            print("Sequence level2: %s" % decoded_value_level2)
+            print('Expected level2: %s' % y_test_real_level2)
+
+            pred_l2 = y_predicted[0][categories_level2:]
+            pred_family_l2 = y_predicted[0][:categories_level2]
+            # print("START")
+            # print(one_hot_decode([pred_family_l2], unique_cats_level2)[0])
+            # print('Predicted level2: %s' % [pred_l2], unique_cats_level2[0])
+            # print("END")
+            print('Predicted decoded level2: %s' % one_hot_decode([pred_l2], unique_cats_level2)[0])
+
+            if one_hot_decode([pred_l2], unique_cats_level2)[0] == y_test_real_level2:
+                gotten_right += 1
+            else:
+                gotten_wrong += 1
+                print("*--------> wrong prediction!")
+        print("nr of right predictions = %s" % gotten_right)
+        print("nr of wrong predictions = %s" % gotten_wrong)
+        '''
+    print("++++++++++++++++++++++++++++++++++++++++++++++++")
+    build_model(X_train, y_train, X_val, y_val, 30, 0.2, 150, 'adagrad', 'standard',
+                'standard categorical crossentropy loss')
+    print("++++++++++++++++++++++++++++++++++++++++++++++++")
+    build_model(X_train, y_train, X_val, y_val, 30, 0.2, 150, 'adagrad', 'custom', 'custom loss')
 
     ##################################
 
 
+print("******************************* MODEL W/ INPUT INSTANCES W/ ENCODING OF CATEGORY L2 AND ITS SIBLINGS")
 lstm_model_categorical_data_concat()
 
 
@@ -349,13 +416,16 @@ def lstm_model_categorical_data_first_l2():
 
     df_train = pd.read_csv(
         '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_train_set.csv')
+    df_train = df_train.loc[(df_train.visitorid == 404403)]
     df_validation = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_val_set.csv')
     ############# for testing purposes (less time consuming using a smaller dataset):
-    train_pct_index = int(0.1 * len(df_train))
-    df_train, df_discard_train = df_train[:train_pct_index], df_train[train_pct_index:]
-    test_pct_index = int(0.3 * len(df_validation))
-    df_validation, df_discard_test = df_validation[:test_pct_index], df_validation[test_pct_index:]
+    # train_pct_index = int(0.1 * len(df_train))
+    # df_train, df_discard_train = df_train[:train_pct_index], df_train[train_pct_index:]
+    # test_pct_index = int(0.1 * len(df_validation))
+    # df_validation, df_discard_test = df_validation[:test_pct_index], df_validation[test_pct_index:]
     ############
+    indexes_train = df_train.index.values
+
     df_train['sequence_cats_level1'] = [ast.literal_eval(cat_list_string) for cat_list_string in
                                         df_train['sequence_cats_level1']]
     df_validation['sequence_cats_level1'] = [ast.literal_eval(cat_list_string) for cat_list_string in
@@ -395,7 +465,8 @@ def lstm_model_categorical_data_first_l2():
 
     input_encoded_train = []
     output_encoded_train = []
-    for x in range(samples):
+
+    for x in indexes_train:
         one_sequence_encoding_input = []
         current_sequence = X_train_level2[x]
         for v in range(len(current_sequence)):
@@ -448,12 +519,46 @@ def lstm_model_categorical_data_first_l2():
         cross_ent = K.categorical_crossentropy(y_true, y_pred, from_logits=False)
         return cross_ent
 
-    def w_categorical_crossentropy_custom(y_true, y_pred):
-        cross_ent = K.categorical_crossentropy(y_true, y_pred, from_logits=False)
-        return cross_ent
+    def matrix_relations_construction():
+        mat = np.zeros((categories_level2, categories_level2))
+        for pred in range(categories_level2):
+            for true in range(categories_level2):
+                parent_pred = hierarchy_aux_dict[unique_cats_level2[pred]]
+                parent_true = hierarchy_aux_dict[unique_cats_level2[true]]
+                if parent_pred == parent_true:
+                    mat[true, pred] = 1
+                    mat[pred, true] = 1
+        return mat
+
+    def loss_function(matrix):
+        matrix = tf.constant(matrix, np.float32)
+        print(matrix)
+
+        def loss(y_true, y_pred):
+            print(y_true)
+            print(y_pred)
+
+            l2_y_true = K.argmax(y_true[:, :],
+                                 axis=1)  # gets the index of the max value category in the 1-hot encoded array of levels2 categories. for each y_pred dataset sample
+            l2_y_pred = K.argmax(y_pred[:, :],
+                                 axis=1)  # gets the index of the maximum prob category l2 predicted, in the 1-hot encoded array of levels2 categories. for each y_pred dataset sample
+
+            gather_mat = tf.gather_nd(matrix, tf.stack((l2_y_true, l2_y_pred), -1))
+
+            cond = K.equal(gather_mat, K.constant(1))
+            return K.switch(cond,
+                            # if the predicted l2 category is a sibling of the true l2 category -> turn the loss value lower by multiplying it by 0.1
+                            lambda: K.categorical_crossentropy(y_true[:, :],
+                                                               y_pred[:, :],
+                                                               from_logits=False) * 0.1,
+                            lambda: K.categorical_crossentropy(y_true[:, :],
+                                                               y_pred[:, :],
+                                                               from_logits=False))
+
+        return loss
 
     ################################    LSTM Model:
-    def build_model(X_t, y_t, X_v, y_v, units, dropout, epochs, opt, loss, title, weights_mat, flag_weight):
+    def build_model(X_t, y_t, X_v, y_v, units, dropout, epochs, opt, loss, title):
         metric_l2 = partial(categorical_accuracy_l2)
         metric_l2.__name__ = 'categorical_accuracyl2'
         print("MODEL " + str(title))
@@ -462,31 +567,29 @@ def lstm_model_categorical_data_first_l2():
         model = Sequential()
         model.add(Masking(mask_value=-1, input_shape=(timesteps, categories_level2)))
         model.add(LSTM(units, input_shape=(timesteps, categories_level2), dropout=dropout,
-                       return_sequences=False))  # units-> random number. trial and error methodology.
+                       return_sequences=False))
         model.add(Dense(categories_level2, activation='softmax'))
         if loss == 'standard':
             model.compile(loss='categorical_crossentropy', optimizer=opt,
                           metrics=['acc'])
         else:
-            if flag_weight == 1:
-                custom_loss = partial(loss, weights=weights_mat)
-            else:
-                custom_loss = partial(loss)
-            custom_loss.__name__ = 'w_categorical_crossentropy'
-            model.compile(loss=custom_loss, optimizer=opt, metrics=[metric_l2])
+            matrix_siblings_relations = matrix_relations_construction()
+            model.compile(loss=loss_function(matrix_siblings_relations), optimizer=opt,
+                          metrics=['acc'])
         print(model.summary())
         # history = LossHistory()
         print("model fit")
-        history = model.fit(X_t, y_t, validation_data=(X_v, y_v), epochs=epochs, verbose=0)
+        history = model.fit(X_t, y_t, epochs=epochs,
+                            verbose=0)  # validation_data=(X_v, y_v), epochs=epochs, verbose=0)
         print("model evaluate")
         print(model.metrics_names)
 
         loss_train, accuracy_train = model.evaluate(X_t, y_t, verbose=0)
         print('Accuracy train: %f' % (accuracy_train * 100))
-        loss_val, accuracy_val = model.evaluate(X_v, y_v, verbose=0)
-        print('Accuracy validation: %f' % (accuracy_val * 100))
+        # loss_val, accuracy_val = model.evaluate(X_v, y_v, verbose=0)
+        # print('Accuracy validation: %f' % (accuracy_val * 100))
 
-        if loss == 'standard':
+        '''if loss == 'standard':
             # PLOT
             plt.ylim(0.0, 1.0)
             plt.plot(history.history['acc'])
@@ -496,45 +599,57 @@ def lstm_model_categorical_data_first_l2():
             plt.title(title, pad=-80)
 
             # plt.legend(['train', 'validation'], loc='upper left')
-            # plt.show()
+            # plt.show()'''
 
-        ################################## test on a new sample. prediction on a SINGLE new data sequence. experiment
-        sequence_test_level2 = [312, 145, 798, 92]
-        encoded_test_seq_input = []
-        for pred in range(len(sequence_test_level2)):
-            v2 = sequence_test_level2[pred]
-            encoded_test_seq_input.append(
-                one_hot_encode(v2, categories_level2, unique_cats_level2))
+        ################################## experiments
 
-        if (pred + 1) < timesteps:  # -1 as a value chosen to ignore (mask) positions in the sequence with no values
-            for true in range(timesteps - (pred + 1)):
-                encoded_test_seq_input.append((
-                    [-1 for _ in range(categories_level2)]))
+        testing_samples_sequences = X_train_level2
+        testing_samples_next_category = y_train_level2
+        gotten_right = 0
+        gotten_wrong = 0
+        for i in range(len(testing_samples_sequences)):
+            sample_sequence = testing_samples_sequences.iloc[i]
+            encoded_test_seq_input = []
+            for pred in range(len(sample_sequence)):
+                v2 = sample_sequence[pred]
+                encoded_test_seq_input.append(
+                    one_hot_encode(v2, categories_level2, unique_cats_level2))
 
-        X_test_sample = [encoded_test_seq_input]
-        X_test_sample = array(X_test_sample)
-        # print(X_test_sample.shape)
+            if (pred + 1) < timesteps:  # -1 as a value chosen to ignore (mask) positions in the sequence with no values
+                for true in range(timesteps - (pred + 1)):
+                    encoded_test_seq_input.append((
+                        [-1 for _ in range(categories_level2)]))
 
-        y_test_real_level2 = 312
+            X_test_sample = [encoded_test_seq_input]
+            X_test_sample = array(X_test_sample)
+            # print(X_test_sample.shape)
 
-        y_predicted = model.predict(X_test_sample)
-        encoded_test_l2 = []
-        for position_seq in X_test_sample[0]:
-            encoded_complete_value = position_seq
-            encoded_value_level2 = encoded_complete_value[:]
-            encoded_test_l2.append(encoded_value_level2.tolist())
+            y_test_real_level2 = testing_samples_next_category.iloc[i]
 
-        decoded_value_level2 = one_hot_decode(encoded_test_l2, unique_cats_level2)
-        print("Sequence level2: %s" % decoded_value_level2)
-        print('Expected level2: %s' % y_test_real_level2)
+            y_predicted = model.predict(X_test_sample)
+            encoded_test_l2 = []
+            for position_seq in X_test_sample[0]:
+                encoded_complete_value = position_seq
+                encoded_value_level2 = encoded_complete_value[:]
+                encoded_test_l2.append(encoded_value_level2.tolist())
 
-        pred_l2 = y_predicted[0][:]
+            decoded_value_level2 = one_hot_decode(encoded_test_l2, unique_cats_level2)
+            print("----")
+            print("Sequence level2: %s" % decoded_value_level2)
+            print('Expected level2: %s' % y_test_real_level2)
+            pred_l2 = y_predicted[0][:]
 
-        # print('Predicted level2: %s' % [pred_l2], unique_cats_level2[0])
+            print('Predicted decoded level2: %s' % one_hot_decode([pred_l2], unique_cats_level2)[0])
 
-        print('Predicted decoded level2: %s' % one_hot_decode([pred_l2], unique_cats_level2)[0])
+            if one_hot_decode([pred_l2], unique_cats_level2)[0] == y_test_real_level2:
+                gotten_right += 1
+            else:
+                gotten_wrong += 1
+                print("*--------> wrong prediction!")
+        print("nr of right predictions = %s" % gotten_right)
+        print("nr of wrong predictions = %s" % gotten_wrong)
 
-
+    '''
     momentums = ['sgd', 'rmsprop', 'adagrad', 'adam']
     dropouts = [0, 0.2, 0.4, 0.6]
     units = [10, 30, 50, 70]
@@ -546,16 +661,24 @@ def lstm_model_categorical_data_first_l2():
         plt.subplot(plot_no)
         # fit model and plot learning curves for an optimizer
         build_model(X_train, y_train, X_val, y_val, 40, 0.2, epochs[i], 'adagrad', 'standard', epochs[i], 'none', 0)
+    '''
+    print("++++++++++++++++++++++++++++++++++++++++++++++++")
+    build_model(X_train, y_train, X_val, y_val, 30, 0.2, 150, 'adagrad', 'standard',
+                'standard categorical accuracy keras')
+    print("++++++++++++++++++++++++++++++++++++++++++++++++")
+    build_model(X_train, y_train, X_val, y_val, 30, 0.2, 150, 'adagrad', 'custom',
+                'standard categorical accuracy keras')
 
-    # build_model(X_train, y_train, X_val, y_val, 30, 0, 100, 'adagrad', 'standard', 'standard categorical accuracy keras', 'none', 0)
-    #build_model(X_train, y_train, X_val, y_val, 30, 0, 100, 'adagrad', w_categorical_crossentropy_none,
-     #           'categorical accuracy keras backend, predict l2', 'none', 0)
+    # build_model(X_train, y_train, X_val, y_val, 30, 0, 100, 'adagrad', w_categorical_crossentropy_none,
+    #           'categorical accuracy keras backend, predict l2', 'none', 0)
 
-    plt.show()
-    ##################################
+    # plt.show()
 
 
-#lstm_model_categorical_data_first_l2()
+print("******************************* MODEL W/ INPUT INSTANCES W/ JUST 1-HOT ENCODING CATEGORY L2")
+
+
+# lstm_model_categorical_data_first_l2()
 
 
 ##### STANDARD LSTM MODEL. FIRST MODEL:
