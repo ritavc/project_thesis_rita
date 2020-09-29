@@ -3,198 +3,130 @@ from sklearn.model_selection import train_test_split
 import numpy as np
 import networkx as nx
 from pprint import pprint
+import ast
 
 pd.options.display.max_columns
+import itertools
 
-df = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items_new.csv')
+df_cat = pd.read_csv(
+    '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_tree.csv')  # , converters={'parentid': lambda x: str(x)})
+df_cat = df_cat.fillna(-1)
+df_cat = df_cat.astype(int)
 
-highest_category = 1696
-range_categories = 290
+
+def empty_initial_categories_dict():
+    list_cats_initial = []
+    tree_dict = dict()
+    root_cats = df_cat.loc[(df_cat.parentid == -1)]
+    root_cats = list(root_cats.categoryid)
+    root_cats.sort()
+    for cat in root_cats:
+        tree_dict[cat] = []
+    # print(root_cats)
+    return tree_dict
+
+
+def category_tree():
+    tree_dict_l1_original = empty_initial_categories_dict()  ###level 1
+    list_root_categories = list(tree_dict_l1_original.keys())
+    aux_dict_2 = {}
+    for cat in list_root_categories:  ###level 2
+        categories_next_level = df_cat.loc[(df_cat.parentid == int(cat))]
+        l = list(categories_next_level.categoryid)
+        l.sort()
+        tree_dict_l1_original[cat] = l
+        for elem in l:
+            aux_dict_2[elem] = cat
+    return aux_dict_2, tree_dict_l1_original
+
+
+general_tree_category = category_tree()
+hierarchy_aux_dict = general_tree_category[0]
+
 
 # print(dict_categories)
 
-def get_transition_matrix_re_use(sequence): # sequence of items' categories in history
-    dict_categories = dict.fromkeys(range(highest_category + 1), 0)
+def init_counts_matrix(unique_cats_level2, total_categories_level2):
+    # create initial matrix, with all zeroes.
+    trans_matrix = np.zeros([total_categories_level2, total_categories_level2],
+                            dtype=float)  # creating initial matrix of all-zeros
+    dict_categories = dict.fromkeys(unique_cats_level2, 0)
 
-    n = 1 + highest_category # max(sequence)  # number of states
-
-    M_counts = np.zeros([n, n], dtype=float)  # creating initial matrix of all-zeros
-
-    for (i, j) in zip(sequence, sequence[1:]):  # to connect "sequences" of 2 events, followed by each other -> matriz de contagens
-        M_counts[i][j] += 1
-        #print("M[{{0:.5f}}][{{0:.5f}}] = {}".format(i, j, M[i][j]))
-        dict_categories[i] += 1 #count number of times it starts from i
-    print("in M_counts[859][0] = {}".format(M_counts[859][0]))
-    print("in M_counts[859][859] = {}".format(M_counts[859][859]))
-
-    #for r in M_counts: print(' '.join('{0:.9f}'.format(x) for x in r))
-    print("in dict_categories[955] = {}".format(dict_categories[859]))
-    print("in dict_categories[0] = {}".format(dict_categories[0]))
-
-    # go trough matrix, to convert to probabilities -> using Laplace smoothing:
-    M_probs = M_counts.copy()
-    for i in range(len(M_probs)):
-        for j in range(len(M_probs[i])):
-            # print(dict_categories[i])
-            M_probs[i][j] = (M_probs[i][j] + 1) / (dict_categories[i] + range_categories)
-
-    #for r in M_probs: print(' '.join('{0:.5f}'.format(x) for x in r))
-    print("in M_probs[859][0] = {}".format(M_probs[859][0]))
-    print("in M_probs[859][859] = {}".format(M_probs[859][859]))
-    print("max...{} ".format((M_probs[859]).argmax()))
-    return M_probs
-
-def get_transition_matrix(sequence, list_indexes): # sequence of items' categories in history
-    distinct_categories_ = len(list_indexes)
-    n = distinct_categories_ # max(sequence)  # number of states PENSAR!!!!!!
-
-    #dict_categories = dict.fromkeys(range(highest_category + 1), 0)
-    dict_categories = dict.fromkeys(list_indexes, 0)
-    M_counts = np.zeros([n, n], dtype=float)  # creating initial matrix of all-zeros
-
-    for (i, j) in zip(sequence, sequence[1:]):  # to connect "sequences" of 2 events, followed by each other -> matriz de contagens
-        index_i = list_indexes.index(i)
-        #print("----------")
-        #print(i)
-        #print(index_i)
-        index_j = list_indexes.index(j)
-        #print(j)
-        #print(index_j)
-        M_counts[index_i][index_j] += 1
-        #print("M[{{0:.5f}}][{{0:.5f}}] = {}".format(i, j, M[i][j]))
-        dict_categories[i] += 1 #count number of times it starts from i
-    for r in M_counts: print(' '.join('{}'.format(x) for x in r))
-    print(dict_categories)
-
-    M_probs = M_counts.copy()
-    # go trough matrix, to convert to probabilities -> using Laplace smoothing:
-    for i in range(len(M_probs)):
-        for j in range(len(M_probs[i])):
-            #print(list_indexes[i])
-            M_probs[i][j] = (M_probs[i][j] + 1) / (dict_categories[list_indexes[i]] + distinct_categories_)
-
-    for r in M_probs: print(' '.join('{0:.5f}'.format(x) for x in r))
-
-    return M_probs
-
-def train_model():
-    df_train = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_train.csv')
-
-    unique_visitors = df_train['visitorid'].unique()
-    right = 0
-    nr_cases = 0
-    for current_visitor in unique_visitors:
-        y = []
-        for index, row in df_train.iterrows():
-            #print("______" + str(i))
-            categoryId = int(row['value'])
-            visitorId = int(row['visitorid'])
-            if visitorId == current_visitor:
-                y.append(categoryId)
-        print("------------------------------------")
-        print("visitor: {}".format(current_visitor))
-        print(y)
-        compare_cat = y.pop()
-        last_category = y[-1]
-        print(last_category)
-        #line_transition_from_last_cat = m[last_category]
-        print("- def get_transition_matrix ")
-        list_indexes = list(set(y))
-        list_indexes.sort() #necessário mm? **
-        #print(list_indexes)
-        m = get_transition_matrix(y, list_indexes)
-        going_state_index = np.argmax(np.amax(m[list_indexes.index(last_category)], axis=0))
-        print("predicted next category: {}; real next category: {}".format(list_indexes[going_state_index], compare_cat))
-        if list_indexes[going_state_index] == compare_cat:
-            right += 1
-        nr_cases += 1
-    accuracy = right/nr_cases
-    print("accuracy = {}; nr cases gotten right = {}; total nr of cases = {}".format(accuracy, right, nr_cases))
-
-    '''print("----- def get_transition_matrix -----")
-    m_2 = get_transition_matrix(y)
-    going_state_2 = (m_2[last_category]).argmax()
-    print("predicted next category: {}; real next category: {}".format(going_state_2, compare_cat))'''
-
-train_model()
+    return trans_matrix, dict_categories
 
 
-def train_get_result():
-    df.sort_values(by=['timestamp'], inplace=True)
-    y = df['value']
-    X = df.drop(['value'], axis=1)
-    train_pct_index = int(0.1 * len(y))
-    #X_train, X_test = X[:train_pct_index], X[train_pct_index:]
-    #y_train, y_test = y[:train_pct_index], y[train_pct_index:]
-    #X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.7)
-    #print(y_train.head(30))
+def update_counts_matrix(unique_cats_level2, trans_matrix, dict_categories_counts, sequence):
+    for (i, j) in zip(sequence, sequence[1:]):  # transition from one category to another.
+        index_i = unique_cats_level2.index(i)
+        index_j = unique_cats_level2.index(j)
+        trans_matrix[index_i][index_j] += 1
+        dict_categories_counts[i] += 1  # count number of times it starts from i
 
-    y_train = y
-    m = get_transition_matrix_re_use(y_train)
-    #for r in m: print(' '.join('{0:.9f}'.format(x) for x in r))
-    last_category = y_train.iloc[[-1]]
-    last_category = int(last_category.to_string(index=False))
-    print("last category: %s" % last_category)
-    line_transition_from_last_cat = m[last_category]
-    #print(line_transition_from_last_cat)
-    k = 0
-    for i in line_transition_from_last_cat:
-        print(k)
-        print(i)
-        k+=1
-    print(line_transition_from_last_cat[1095])
-    print(np.argmax(line_transition_from_last_cat, axis=0))
-    #print(line_transition_from_last_cat.index(max(line_transition_from_last_cat)))
-    going_state = np.argmax(np.amax(m[last_category], axis=0))       # np.amax(m[last_category])# np.argmax(np.max(m[last_category], axis=0))
-    #print("prediction ... it is more probable a transition FROM the last state {} TO {}".format(last_category, going_state))
+    '''for r in trans_matrix:
+        print(' '.join('{}'.format(x) for x in r))'''
 
 
+def create_transitions_matrix(matrix_counts, dict_categories_counts, unique_cats_level2, total_categories_level2):
+    matrix_probs = matrix_counts.copy()
+    # applying Laplace smoothing here:
+    for i in range(len(matrix_probs)):
+        for j in range(len(matrix_probs[i])):
+            # print(list_indexes[i])
+            matrix_probs[i][j] = (matrix_probs[i][j] + 1) / (
+                        dict_categories_counts[unique_cats_level2[i]] + total_categories_level2)
+
+    '''for r in matrix_probs:
+        print(' '.join('{0:.5f}'.format(x) for x in r))'''
+
+    return matrix_probs
 
 
+def train_validate_model():
+    unique_cats_level2 = list(itertools.chain.from_iterable(general_tree_category[1].values()))
+    unique_cats_level2.sort()
+    print(unique_cats_level2)
+    print("Distinct nr of categories level2: %s" % (len(unique_cats_level2)))
+    df_train = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_train_set.csv')
+    df_validation = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_val_set.csv')
+    df_train['sequence_cats_level2'] = [ast.literal_eval(cat_list_string) for cat_list_string in
+                                        df_train['sequence_cats_level2']]
+    df_validation['sequence_cats_level2'] = [ast.literal_eval(cat_list_string) for cat_list_string in
+                                             df_validation['sequence_cats_level2']]
 
+    total_categories_level2 = len(unique_cats_level2)
+    counts_matrix, dict_counts = init_counts_matrix(unique_cats_level2, total_categories_level2)
+    for index, row in df_train.iterrows():
+        sequence = row['sequence_cats_level2'] + [row['next_cat_level2']]
+        update_counts_matrix(unique_cats_level2, counts_matrix, dict_counts, sequence)
+    transitions_matrix = create_transitions_matrix(counts_matrix, dict_counts, unique_cats_level2,
+                                                   total_categories_level2)
+    print("IN TRAIN SET:")
+    # in train dataset:
+    cases_right_train = 0
+    nr_cases_train = 0
+    for index, row in df_train.iterrows():
+        nr_cases_train += 1
+        last_category = row['sequence_cats_level2'][-1]
+        predicted_cat_train = unique_cats_level2[np.argmax(transitions_matrix[unique_cats_level2.index(last_category)])]
+        real_cat_train = row['next_cat_level2']
+        print("predicted next category: {}; real next category: {}".format(predicted_cat_train, real_cat_train))
+        if predicted_cat_train == real_cat_train:
+            cases_right_train += 1
+    accuracy_train = cases_right_train / nr_cases_train
+    print("accuracy train = {}; nr cases gotten right in train set = {}; total nr of cases in train set = {}".format(accuracy_train, cases_right_train, nr_cases_train))
 
+    # in validation dataset:
+    cases_right_val = 0
+    nr_cases_val = 0
+    for index, row in df_validation.iterrows():
+        nr_cases_val += 1
+        last_category = row['sequence_cats_level2'][-1]
+        predicted_cat = unique_cats_level2[np.argmax(transitions_matrix[unique_cats_level2.index(last_category)])]
+        real_cat = row['next_cat_level2']
+        print("predicted next category: {}; real next category: {}".format(predicted_cat, real_cat))
+        if predicted_cat == real_cat:
+            cases_right_val += 1
+    accuracy_validation = cases_right_val/nr_cases_val
+    print("accuracy validation = {}; nr cases gotten right in val set = {}; total nr of cases in val set = {}".format(accuracy_validation, cases_right_val, nr_cases_val))
 
-
-
-
-
-################### TRANSITIONS GRAPH - EXPERIMENTS
-
-# create a function that maps transition probability dataframe
-# to markov edges and weights
-
-def get_markov_edges(Q):
-    edges = {}
-    for col in Q.columns:
-        for idx in Q.index:
-            edges[(idx, col)] = Q.loc[idx, col]
-    return edges
-
-
-def get_transitions_diagram(m):
-    edges_wts = get_markov_edges(pd.DataFrame(m))
-    pprint(edges_wts)
-
-    # create graph object
-    G = nx.MultiDiGraph()
-    states = [0, 1, 2]
-    # nodes correspond to states
-    G.add_nodes_from(states)
-    # print(f'Nodes:\n{G.nodes()}\n')
-
-    # edges represent transition probabilities
-    for k, v in edges_wts.items():
-        tmp_origin, tmp_destination = k[0], k[1]
-        G.add_edge(tmp_origin, tmp_destination, weight=v, label=v)
-    # print(f'Edges:')
-    pprint(G.edges(data=True))
-
-    pos = nx.drawing.nx_pydot.graphviz_layout(G, prog='dot')
-    nx.draw_networkx(G, pos)
-    '''
-    # create edge labels for jupyter plot but is not necessary
-    edge_labels = {(n1,n2):d['label'] for n1,n2,d in G.edges(data=True)}
-    nx.draw_networkx_edge_labels(G , pos, edge_labels=edge_labels)
-    nx.drawing.nx_pydot.write_dot(G, '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/retail_rocket_markov_chain.dot')
-    nx.draw(G)
-    plt.show()'''
+train_validate_model()
