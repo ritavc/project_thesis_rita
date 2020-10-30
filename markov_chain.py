@@ -115,6 +115,7 @@ def train_validate_model():
     accuracy_train = cases_right_train / nr_cases_train
     print("accuracy train = {}; nr cases gotten right in train set = {}; total nr of cases in train set = {}".format(accuracy_train, cases_right_train, nr_cases_train))
 
+    print("IN VALIDATION SET:")
     # in validation dataset:
     cases_right_val = 0
     nr_cases_val = 0
