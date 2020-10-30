@@ -11,12 +11,17 @@ from keras.models import Sequential
 from numpy import array
 from keras.models import Model
 import tensorflow as tf
+
 import keras as keras
 import keras.backend as K
 from itertools import product
 import itertools
+from sklearn import metrics
 from keras.callbacks import TensorBoard
 from time import time
+import seaborn as sn
+import scikitplot as skplt
+from sklearn.metrics import recall_score
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 stderr = sys.stderr
@@ -121,12 +126,10 @@ def one_hot_decode_target(encoded_prediction, unique_cats):
     value = unique_cats[encoded_prediction.index(1)]
     return value
 
-
 def lstm_model_categorical_data_concat():
     unique_cats_level2 = list(itertools.chain.from_iterable(general_tree_category[1].values()))
     unique_cats_level2.sort()
     print("Distinct nr of categories level2: %s" % (len(unique_cats_level2)))
-
     df_train = pd.read_csv(
         '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_train_set.csv')
     # df_train = df_train.loc[(df_train.visitorid == 404403)]
@@ -134,11 +137,14 @@ def lstm_model_categorical_data_concat():
 
     # '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_train_set_temp.csv')
     df_validation = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_val_set.csv')
+    df_test = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_test_set.csv')
     ############# for testing purposes (less time consuming using a smaller dataset):
-    # train_pct_index = int(0.1 * len(df_train))
-    # df_train, df_discard_train = df_train[:train_pct_index], df_train[train_pct_index:]
-    # test_pct_index = int(0.1 * len(df_validation))
-    # df_validation, df_discard_test = df_validation[:test_pct_index], df_validation[test_pct_index:]
+    #train_pct_index = int(0.7 * len(df_train))
+    #df_train, df_discard_train = df_train[:train_pct_index], df_train[train_pct_index:]
+    #val_pct_index = int(0.7 * len(df_validation))
+    #df_validation, df_discard_val = df_validation[:val_pct_index], df_validation[val_pct_index:]
+    #test_pct_index = int(0.1 * len(df_test))
+    #df_test, df_discard_test = df_test[:test_pct_index], df_test[test_pct_index:]
     ############
     indexes_train = df_train.index.values
     indexes_validation = df_validation.index.values
@@ -147,40 +153,45 @@ def lstm_model_categorical_data_concat():
                                         df_train['sequence_cats_level1']]
     df_validation['sequence_cats_level1'] = [ast.literal_eval(cat_list_string) for cat_list_string in
                                              df_validation['sequence_cats_level1']]
+    df_test['sequence_cats_level1'] = [ast.literal_eval(cat_list_string) for cat_list_string in df_test['sequence_cats_level1']]
     df_train['sequence_cats_level2'] = [ast.literal_eval(cat_list_string) for cat_list_string in
                                         df_train['sequence_cats_level2']]
     df_validation['sequence_cats_level2'] = [ast.literal_eval(cat_list_string) for cat_list_string in
                                              df_validation['sequence_cats_level2']]
+    df_test['sequence_cats_level2'] = [ast.literal_eval(cat_list_string) for cat_list_string in df_test['sequence_cats_level2']]
     df_train['sequence_events'] = [ast.literal_eval(event_list_string) for event_list_string in
                                    df_train['sequence_events']]
     df_validation['sequence_events'] = [ast.literal_eval(event_list_string) for event_list_string in
                                         df_validation['sequence_events']]
+    df_test['sequence_events'] = [ast.literal_eval(event_list_string) for event_list_string in df_test['sequence_events']]
 
     X_train_level2 = df_train['sequence_cats_level2']
     y_train_level2 = df_train['next_cat_level2']
     X_val_level2 = df_validation['sequence_cats_level2']
     y_val_level2 = df_validation['next_cat_level2']
+    X_test_level2 = df_test['sequence_cats_level2']
+    y_test_level2 = df_test['next_cat_level2']
 
     # categories_level1 = len(unique_cats_level1)
     categories_level2 = len(unique_cats_level2)
     events_unique = 3
-    timesteps = 0
-    samples = X_train_level2.shape[0]
-    print(X_train_level2.shape)
-    samples_val = X_train_level2.shape[0]
-
-    for current_sequence in X_train_level2:
+    timesteps = 5
+    samples_train = X_train_level2.shape[0]
+    samples_val = X_val_level2.shape[0]
+    samples_test = X_test_level2.shape[0]
+    '''for current_sequence in X_train_level2:
         if len(current_sequence) > timesteps:
             timesteps = len(current_sequence)
 
     samples_val = X_val_level2.shape[0]
     for current_sequence in X_val_level2:
         if len(current_sequence) > timesteps:
-            timesteps = len(current_sequence)
+            timesteps = len(current_sequence)'''
 
     print("TIMESTEPS: " + str(timesteps))
-    print("SAMPLES train: " + str(samples))
+    print("SAMPLES train: " + str(samples_train))
     print("SAMPLES val: " + str(samples_val))
+    print("SAMPLES test: " + str(samples_test))
 
     input_encoded_train = []
     output_encoded_train = []
@@ -226,7 +237,7 @@ def lstm_model_categorical_data_concat():
         input_encoded_val.append(one_sequence_encoding_input)
 
     X_train = array(input_encoded_train)
-    X_train = X_train.reshape(samples, timesteps, (categories_level2 + categories_level2))
+    X_train = X_train.reshape(samples_train, timesteps, (categories_level2 + categories_level2))
     y_train = array(output_encoded_train)
     X_val = array(input_encoded_val)
     X_val = X_val.reshape(samples_val, timesteps, (categories_level2 + categories_level2))
@@ -238,6 +249,14 @@ def lstm_model_categorical_data_concat():
         return K.cast(K.equal(K.argmax(y_true[:, categories_level2:], axis=-1),
                               K.argmax(y_pred[:, categories_level2:], axis=-1)),
                       K.floatx())
+
+    def recall_at_k_l2(y_true, y_pred):
+        true_positives = K.sum(K.round(K.clip(y_true[:, categories_level2:] * y_pred[:, categories_level2:], 0, 1)))
+        possible_positives = K.sum(K.round(K.clip(y_true[:, categories_level2:], 0, 1)))
+        return true_positives / (possible_positives + K.epsilon())
+
+    #def mrr_at_k(y_true, y_pred):
+     #   return tf.metrics.recall_at_k(y_true[:, categories_level2:], y_pred[:, categories_level2:], 5)
 
     ################################        Loss Function Customization - Function Construction:
 
@@ -254,8 +273,8 @@ def lstm_model_categorical_data_concat():
 
     def loss_function(matrix):
         matrix = tf.constant(matrix, np.float32)
-        matrix_ones = np.ones((categories_level2, categories_level2))
-        matrix_ones = tf.convert_to_tensor(matrix_ones, np.float32)
+        #matrix_ones = np.ones((categories_level2, categories_level2))
+        #matrix_ones = tf.convert_to_tensor(matrix_ones, np.float32)
         print(matrix)
 
         def loss(y_true, y_pred):
@@ -263,17 +282,20 @@ def lstm_model_categorical_data_concat():
             print(y_pred[:, categories_level2:])
 
             l2_y_true = K.argmax(y_true[:, categories_level2:],
-                                 axis=1)  # gets the index of the max value category in the 1-hot encoded array of levels2 categories. for each y_pred dataset sample
+                                 axis=1)  # gets the INDEX of the max value category in the 1-hot encoded array of levels2 categories. for each y_pred dataset sample
             print(l2_y_true)
             l2_y_pred = K.argmax(y_pred[:, categories_level2:],
-                                 axis=1)  # gets the index of the maximum prob category l2 predicted, in the 1-hot encoded array of levels2 categories. for each y_pred dataset sample
+                                 axis=1)  # gets the INDEX of the maximum prob category l2 predicted, in the 1-hot encoded array of levels2 categories. for each y_pred dataset sample
             print(l2_y_pred)
 
             gather_mat = tf.gather_nd(matrix, tf.stack((l2_y_true, l2_y_pred), -1))
-            print(gather_mat)
+            print(
+                gather_mat)  # what this does is to look for the value is the matrix corresponding to the relationship between l2_y_true and l2_y_pred. matrix[l2_y_true, l2_y_pred]
+            # K.equal(tf.gather_nd(matrix, [0, 1]), K.constant(1)) teste básico. tudo ok.
 
             cond = K.equal(gather_mat, K.constant(1))
-            # K.equal(tf.gather_nd(matrix, [0, 1]), K.constant(1)) teste básico. tudo ok.
+            # if there is a relationship (value in matrix of 1) -> cond is true.
+
             return K.switch(cond,
                             # if the predicted l2 category is a sibling of the true l2 category -> turn the loss value lower by multiplying it by 0.1
                             lambda: K.categorical_crossentropy(y_true[:, categories_level2:],
@@ -297,7 +319,7 @@ def lstm_model_categorical_data_concat():
         units = units
         dropout = dropout
         model = Sequential()
-        model.add(Masking(mask_value=-1, input_shape=(timesteps, (categories_level2 + categories_level2))))
+        # model.add(Masking(mask_value=-1, input_shape=(timesteps, (categories_level2 + categories_level2))))
         model.add(LSTM(units, input_shape=(timesteps, (categories_level2 + categories_level2)), dropout=dropout,
                        return_sequences=False))  # units-> random number. trial and error methodology.
         model.add(Dense((categories_level2 + categories_level2), activation='softmax'))
@@ -310,32 +332,39 @@ def lstm_model_categorical_data_concat():
         else:
             custom_loss = partial(w_categorical_crossentropy_l2)
             custom_loss.__name__ = 'w_categorical_crossentropy'
+
             model.compile(loss=custom_loss, optimizer=opt,
-                          metrics=[categorical_accuracy_l2])
+                          metrics=[categorical_accuracy_l2, recall_at_k_l2])
 
         # tensorboard = TensorBoard(log_dir='logs/{}'.format(time()))
         print(model.summary())
         print("model fit")
-        history = model.fit(X_t, y_t, validation_data=(X_v, y_v), epochs=epochs, verbose=0)
+        # history = model.fit(X_t, y_t, epochs=epochs, verbose=0)
+        history = model.fit(X_t, y_t, validation_data=(X_v, y_v), epochs=epochs, verbose=1)
         print("model evaluate")
         print(model.metrics_names)
-        loss_train, acc_train = model.evaluate(X_t, y_t, verbose=0)
+        loss_train, acc_train, recall_at_5_train = model.evaluate(X_t, y_t, verbose=1)
         # print('loss_train: %f' % (loss_train * 100))
         print('acc_train: %f' % (acc_train * 100))
+        print('recall_at_5_train: %f' % (recall_at_5_train * 100))
 
-        loss_val, acc_val = model.evaluate(X_v, y_v, verbose=0)
-        #print('loss_val: %f' % (loss_val * 100))
+        loss_val, acc_val, recall_at_5_val = model.evaluate(X_v, y_v, verbose=1)
+        # print('loss_val: %f' % (loss_val * 100))
         print('acc_val: %f' % (acc_val * 100))
+        print('recall_at_5_val: %f' % (recall_at_5_val * 100))
 
         # plt.plot(history.history['categorical_accuracy_l2']) #history verificar se aqui nao é devolvido validation acc tbm.
         # plt.show()
-        '''
-        ################################## experiments
-        X_test_l2 = df_train.loc[(df_train.visitorid == 404403)]
+
+        ################################## experiments - using a test set
+        X_test_l2 = df_test#df_train #df_train.loc[(df_train.visitorid == 404403)]
         X_test = X_test_l2['sequence_cats_level2']
-        y_test = X_test['next_cat_level2']
+        y_test = X_test_l2['next_cat_level2']
         testing_samples_sequences = X_test  # X_train_level2
         testing_samples_next_category = y_test  # y_train_level2
+        testing_samples_next_category_predicted = []
+        print([testing_samples_next_category])
+        print(testing_samples_next_category.shape)
         gotten_right = 0
         gotten_wrong = 0
         for i in range(len(testing_samples_sequences)):
@@ -368,9 +397,10 @@ def lstm_model_categorical_data_concat():
                 encoded_value_level2 = encoded_complete_value[categories_level2:]
                 encoded_test_l2.append(encoded_value_level2.tolist())
 
-            decoded_value_level2 = one_hot_decode(encoded_test_l2, unique_cats_level2)
+            decoded_sequence = one_hot_decode(encoded_test_l2, unique_cats_level2)
+
             print("----")
-            print("Sequence level2: %s" % decoded_value_level2)
+            print("Sequence level2: %s" % decoded_sequence)
             print('Expected level2: %s' % y_test_real_level2)
 
             pred_l2 = y_predicted[0][categories_level2:]
@@ -379,21 +409,32 @@ def lstm_model_categorical_data_concat():
             # print(one_hot_decode([pred_family_l2], unique_cats_level2)[0])
             # print('Predicted level2: %s' % [pred_l2], unique_cats_level2[0])
             # print("END")
-            print('Predicted decoded level2: %s' % one_hot_decode([pred_l2], unique_cats_level2)[0])
-
+            decoded_value_l2 = one_hot_decode([pred_l2], unique_cats_level2)[0]
+            print('Predicted decoded level2: %s' % decoded_value_l2)
+            testing_samples_next_category_predicted.append(decoded_value_l2)
             if one_hot_decode([pred_l2], unique_cats_level2)[0] == y_test_real_level2:
                 gotten_right += 1
             else:
                 gotten_wrong += 1
                 print("*--------> wrong prediction!")
+            print(i)
         print("nr of right predictions = %s" % gotten_right)
         print("nr of wrong predictions = %s" % gotten_wrong)
-        '''
+        print(testing_samples_next_category_predicted)
+        print(len(testing_samples_next_category_predicted))
+
+        confusion_matrix = metrics.confusion_matrix(testing_samples_next_category, testing_samples_next_category_predicted)
+        print(confusion_matrix)
+        print(metrics.classification_report(testing_samples_next_category, testing_samples_next_category_predicted, digits=3))
+        skplt.metrics.plot_confusion_matrix(
+            testing_samples_next_category,
+            testing_samples_next_category_predicted,
+            figsize=(12, 12))
+        #plt.show()
     print("++++++++++++++++++++++++++++++++++++++++++++++++")
-    build_model(X_train, y_train, X_val, y_val, 30, 0.2, 150, 'adagrad', 'standard',
-                'standard categorical crossentropy loss')
+    build_model(X_train, y_train, X_val, y_val, 40, 0.2, 100, 'adagrad', 'standard', 'standard categorical crossentropy loss')
     print("++++++++++++++++++++++++++++++++++++++++++++++++")
-    build_model(X_train, y_train, X_val, y_val, 30, 0.2, 150, 'adagrad', 'custom', 'custom loss')
+    #build_model(X_train, y_train, X_val, y_val, 40, 0.2, 150, 'adagrad', 'custom', 'custom loss')
 
     ##################################
 
