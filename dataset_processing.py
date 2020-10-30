@@ -3,12 +3,15 @@ import pandas as pd
 import seaborn as sns
 import collections
 import datetime
+import matplotlib.pyplot as plt
 
 pd.options.display.max_columns
 df_cat = pd.read_csv(
     '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/category_tree.csv')  # , converters={'parentid': lambda x: str(x)})
 df_cat = df_cat.fillna(-1)
-df_cat = df_cat.astype(int)
+
+
+# df_cat = df_cat.astype(int)
 
 
 def empty_initial_categories_dict():
@@ -223,13 +226,13 @@ def timelag_sessions_division():
         indexes_new_set = list(new_set.index)
         for i in range(new_set.shape[0] - 1):
             minute_diff = (datetime.datetime.min + (
-                        new_set['timestamp'].iloc[i + 1] - new_set['timestamp'].iloc[i])).time()
+                    new_set['timestamp'].iloc[i + 1] - new_set['timestamp'].iloc[i])).time()
             day_diff = (new_set['timestamp'].iloc[i + 1] - new_set['timestamp'].iloc[i]).days
 
             if (day_diff == 0) and ((minute_diff.minute == 0 and minute_diff.second > 1) or (minute_diff.minute == 1)):
                 if new_set['itemid'].iloc[i] == new_set['itemid'].iloc[i + 1] and new_set['event'].iloc[i] == \
                         new_set['event'].iloc[i + 1] and new_set['value'].iloc[i] == new_set['value'].iloc[i + 1]:
-                    # delete consecutive entries made by the same user with the same eventID and same categoryID
+                    # delete consecutive entries made by the same user with the same itemID, eventID and same categoryID
                     indexes_to_remove.append(indexes_new_set[i + 1])
 
     df_visitors.drop(df_visitors.index[indexes_to_remove], inplace=True)
@@ -241,7 +244,7 @@ def timelag_sessions_division():
 
 # timelag_sessions_division()
 
-def group_sessions():
+def group_sessions(n):
     df_final = pd.read_csv(
         '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items_timelag_separation.csv')
 
@@ -257,7 +260,7 @@ def group_sessions():
     smaller = 0
     list_visitorId_consider = []
     for i, row in groups_size.iteritems():
-        if int(row) > 3:
+        if int(row) > n:
             bigger += 1
             list_visitorId_consider.append(i)
         else:
@@ -265,7 +268,7 @@ def group_sessions():
         # print(i, row)
     print("bigger: " + str(bigger))
     print("smaller: " + str(smaller))
-    axs_x = ['shorter sequences w/ less or equal to 3 events', 'seq w/ more than 3 events']
+    axs_x = ['shorter sequences w/ less or equal to N events', 'seq w/ more than N events']
     axs_y = [smaller, bigger]
     sns.barplot(axs_x, axs_y)  # , ax=axs[0])
     # plt.show()
@@ -280,11 +283,9 @@ def group_sessions():
     # attention: deleting here 3 entries in the dataset that only have level1 category and not its corresponding level2 category.
     # in order to fit the purpose of predicting both category levels of the event this decision was made here.
     df_final = df_final[(df_final.level2 != int(-1))]
-
     df_final.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_longer_seqs.csv', index=False)
 
-
-# group_sessions()
+#group_sessions(6)
 
 ## simple statistical analysis of the newly created dataset 'joined_events_items_longer_seqs'
 def experiments_groupings_cats():
@@ -300,7 +301,7 @@ def experiments_groupings_cats():
     print("Distinct nr of users: %s" % (users.shape,))
 
 
-## experiments to split the dataset into train and test sets. division done by spliting a number of users to one side and others to the other side.
+## division done by spliting a number of users to one side and others to the other side.
 # includes different division points.
 # includes simple statistical analysis to check how many short/long sequences result in each division performed.
 ## -> result: csv files 'train_seqs_set' and 'val_seqs_set'
@@ -308,18 +309,21 @@ def dataset_split_by_users():
     df_visitors = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_longer_seqs.csv')
 
     df_visitors.sort_values(by=['visitorid'], inplace=True)
-    # 2890 users to one side, 1239 users to the other side. train with 2890 users.
     # X_train, X_test = X[:train_pct_index], X[train_pct_index:]
     # y_train, y_test = y[:train_pct_index], y[train_pct_index:]
+    print(df_visitors.shape)
     unique_visitors = df_visitors['visitorid'].unique()
-    train_val_division_index = int(0.30 * len(unique_visitors)) #### -> modification here.
+    print(len(unique_visitors))
+    train_val_division_index = int(0.50 * len(unique_visitors))  #### -> modification here.
     unique_train, unique_val_temp = unique_visitors[:train_val_division_index], unique_visitors[
                                                                                 train_val_division_index:]
+    print(len(unique_train))
+    print(len(unique_val_temp))
     val_test_division_index = int(0.70 * len(unique_val_temp))
-    unique_val, unique_test_temp = unique_val_temp[:val_test_division_index], unique_val_temp[val_test_division_index:]
+    unique_val, unique_test = unique_val_temp[:val_test_division_index], unique_val_temp[val_test_division_index:]
 
-    test_division_index = int(0.50 * len(unique_test_temp))
-    unique_test, nothing = unique_test_temp[:test_division_index], unique_test_temp[test_division_index:]
+    #test_division_index = int(0.50 * len(unique_test_temp))
+    #unique_test, nothing = unique_test_temp[:test_division_index], unique_test_temp[test_division_index:]
 
     df_train = df_visitors[df_visitors['visitorid'].isin(unique_train)]
     df_val = df_visitors[df_visitors['visitorid'].isin(unique_val)]
@@ -352,16 +356,16 @@ def dataset_split_by_users():
     print("number of larger sequences in test: " + str(larger_seqs_test))
 
     df_train.sort_values(['visitorid', 'timestamp'], ascending=[True, True], inplace=True)
-    df_train.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/train_set.csv', index=False)
-
+    #df_train.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/train_set.csv', index=False)
+    print(df_train.shape)
     df_val.sort_values(['visitorid', 'timestamp'], ascending=[True, True], inplace=True)
-    df_val.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/validation_set.csv', index=False)
-
+    #df_val.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/validation_set.csv', index=False)
+    print(df_val.shape)
     df_test.sort_values(['visitorid', 'timestamp'], ascending=[True, True], inplace=True)
-    df_test.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/test_set.csv', index=False)
+    #df_test.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/test_set.csv', index=False)
 
 
-dataset_split_by_users()
+#dataset_split_by_users()
 
 
 ## function to shift the dataset in order to be in the form: per row, X sequence of categories (taken from each event) and y next real category
@@ -372,7 +376,8 @@ def prepare_dataset_seqs_target_fixed_window():
     df_train['event'] = df_train['event'].astype('category')
     df_train['event'] = df_train['event'].cat.codes
 
-    data_train = {'visitorid': [], 'session': [], 'sequence_events': [], 'sequence_cats_level1': [], 'next_cat_level1': [],
+    data_train = {'visitorid': [], 'session': [], 'sequence_events': [], 'sequence_cats_level1': [],
+                  'next_cat_level1': [],
                   'sequence_cats_level2': [], 'next_cat_level2': []}
     unique_visitors_train = df_train['visitorid'].unique()
     for current_visitor_train in unique_visitors_train:
@@ -385,12 +390,11 @@ def prepare_dataset_seqs_target_fixed_window():
             cats_level1_train.append(int(elem['level1']))
             cats_level2_train.append(int(elem['level2']))
             events_train.append(int(elem['event']))
-        #print("len = " + str(len(cats_level1_train)))
+        # print("len = " + str(len(cats_level1_train)))
         indexes_slice = []
         for i in range(0, len(cats_level1_train), fixed_window_lookback):
             indexes_slice.append(i)
         indexes_slice.append(len(cats_level1_train))
-
 
         for k in range(0, len(indexes_slice) - 1):
             session_sequence_l1 = cats_level1_train[indexes_slice[k]:indexes_slice[k + 1]]
@@ -416,7 +420,8 @@ def prepare_dataset_seqs_target_fixed_window():
     df_val = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/validation_set.csv')
     df_val['event'] = df_val['event'].astype('category')
     df_val['event'] = df_val['event'].cat.codes
-    data_val = {'visitorid': [], 'session': [], 'sequence_events': [], 'sequence_cats_level1': [], 'next_cat_level1': [],
+    data_val = {'visitorid': [], 'session': [], 'sequence_events': [], 'sequence_cats_level1': [],
+                'next_cat_level1': [],
                 'sequence_cats_level2': [],
                 'next_cat_level2': []}
     unique_visitors_val = df_val['visitorid'].unique()
@@ -460,7 +465,8 @@ def prepare_dataset_seqs_target_fixed_window():
     df_test = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/test_set.csv')
     df_test['event'] = df_test['event'].astype('category')
     df_test['event'] = df_test['event'].cat.codes
-    data_test = {'visitorid': [], 'session': [], 'sequence_events': [], 'sequence_cats_level1': [], 'next_cat_level1': [],
+    data_test = {'visitorid': [], 'session': [], 'sequence_events': [], 'sequence_cats_level1': [],
+                 'next_cat_level1': [],
                  'sequence_cats_level2': [],
                  'next_cat_level2': []}
     unique_visitors_test = df_test['visitorid'].unique()
@@ -501,7 +507,7 @@ def prepare_dataset_seqs_target_fixed_window():
                        index=False)
 
 
-#prepare_dataset_seqs_target_fixed_window()
+# prepare_dataset_seqs_target_fixed_window()
 
 
 def prepare_dataset_seqs_target_moving_window():
@@ -510,7 +516,8 @@ def prepare_dataset_seqs_target_moving_window():
     df_train['event'] = df_train['event'].astype('category')
     df_train['event'] = df_train['event'].cat.codes
 
-    data_train = {'visitorid': [], 'session': [], 'sequence_events': [], 'sequence_cats_level1': [], 'next_cat_level1': [],
+    data_train = {'visitorid': [], 'session': [], 'sequence_events': [], 'sequence_cats_level1': [],
+                  'next_cat_level1': [],
                   'sequence_cats_level2': [], 'next_cat_level2': []}
     unique_visitors_train = df_train['visitorid'].unique()
 
@@ -522,6 +529,15 @@ def prepare_dataset_seqs_target_moving_window():
     next_last_same_l2_train = 0
     next_last_same_l1l2_train = 0
 
+    all_diff_l1_train = 0
+
+    unseen_cat_l1_train = 0
+    unseen_cat_l2_train = 0
+
+    next_cat_l2_most_frequent_train = 0
+    next_cat_l1_most_frequent_train = 0
+
+
     for current_visitor_train in unique_visitors_train:
         cats_level1_train = []
         cats_level2_train = []
@@ -532,14 +548,14 @@ def prepare_dataset_seqs_target_moving_window():
             cats_level1_train.append(int(elem['level1']))
             cats_level2_train.append(int(elem['level2']))
             events_train.append(int(elem['event']))
-        #print("len = " + str(len(cats_level1_train)))
+        # print("len = " + str(len(cats_level1_train)))
         indexes_slice = []
 
         for k in range(0, len(cats_level1_train)):
-            session_sequence_l1 = cats_level1_train[k:k+fixed_window_lookback]
+            session_sequence_l1 = cats_level1_train[k:k + fixed_window_lookback]
             if len(session_sequence_l1) < fixed_window_lookback:
                 break
-            session_sequence_l2 = cats_level2_train[k:k+fixed_window_lookback]
+            session_sequence_l2 = cats_level2_train[k:k + fixed_window_lookback]
 
             data_train['visitorid'].append(current_visitor_train)
             data_train['session'].append(k)
@@ -559,39 +575,71 @@ def prepare_dataset_seqs_target_moving_window():
                 next_last_same_l1_train += 1
             if session_sequence_l2[-1] == session_sequence_l2[-2]:
                 next_last_same_l2_train += 1
-            if session_sequence_l1[-1] == session_sequence_l1[-2] and session_sequence_l2[-1] == session_sequence_l2[-2]:
+            if session_sequence_l1[-1] == session_sequence_l1[-2] and session_sequence_l2[-1] == session_sequence_l2[
+                -2]:
                 next_last_same_l1l2_train += 1
 
+            if len(set(session_sequence_l1)) == len(session_sequence_l1):
+                all_diff_l1_train += 1
 
             real_next_cat_level1 = session_sequence_l1.pop()
             real_next_cat_level2 = session_sequence_l2.pop()
+            if real_next_cat_level1 not in session_sequence_l1:
+                unseen_cat_l1_train += 1
+
+            if real_next_cat_level2 not in session_sequence_l2:
+                unseen_cat_l2_train += 1
+
+            if max(set(session_sequence_l2), key=session_sequence_l2.count) == real_next_cat_level2:
+                next_cat_l2_most_frequent_train += 1
+
+            if max(set(session_sequence_l1), key=session_sequence_l1.count) == real_next_cat_level1:
+                next_cat_l1_most_frequent_train += 1
+
             data_train['next_cat_level1'].append(real_next_cat_level1)
             data_train['next_cat_level2'].append(real_next_cat_level2)
             data_train['sequence_cats_level1'].append(session_sequence_l1)
             data_train['sequence_cats_level2'].append(session_sequence_l2)
             data_train['sequence_events'].append(events_train)
 
-    print("IN TRAIN SET: ")
-    print(" total of instances: %s" % df_train.shape[0])
-    print("- nr of sequences w/ the same category in both l1 and l2: %s ; proportion = %.f" % (seq_all_same_l1l2_train, (100*seq_all_same_l1l2_train/df_train.shape[0])))
-    print("- nr of sequences w/ the same category l1: %s ; proportion = %.f " % (seq_all_same_l1_train, (100*seq_all_same_l1_train/df_train.shape[0])))
-    print("- nr of sequences w/ the same category l2: %s ; proportion = %.f " % (seq_all_same_l2_train, (100*seq_all_same_l2_train/df_train.shape[0])))
-    print("----")
-    print(
-        "- nr of sequences where elem to predict is equal to the last one, considering both l1 and l2: %s; proportion = %.f" % (next_last_same_l1l2_train, (100*next_last_same_l1l2_train/df_train.shape[0])))
-    print(
-        "- nr of sequences where elem to predict is equal to the last one, considering l1: %s; proportion = %.f" % (next_last_same_l1_train, (100*next_last_same_l1_train/df_train.shape[0])))
-    print(
-        "- nr of sequences where elem to predict is equal to the last one, considering l1: %s; proportion = %.f" % (next_last_same_l2_train, (100*next_last_same_l2_train/df_train.shape[0])))
     df_train_new = pd.DataFrame(data_train)
     print(df_train_new.head(20))
-    df_train_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_train_set.csv',
-                        index=False)
+    print("IN TRAIN SET: ")
+    print(" total of instances: %s" % df_train_new.shape[0])
+    print("- nr of sequences w/ ALL the same category in both l1 AND l2: %s ; proportion = %.f" % (
+        seq_all_same_l1l2_train, (100 * seq_all_same_l1l2_train / df_train_new.shape[0])))
+    print("->>>> nr of sequences w/ ALL the same category l1: %s ; proportion = %.f " % (
+        seq_all_same_l1_train, (100 * seq_all_same_l1_train / df_train_new.shape[0])))
+    print("->> nr of sequences w/ ALL the same category l2: %s ; proportion = %.f " % (
+        seq_all_same_l2_train, (100 * seq_all_same_l2_train / df_train_new.shape[0])))
+    print("----")
+    print(
+        "- nr of sequences where elem to predict is equal to the last one, considering BOTH l1 AND l2: %s; proportion = %.f" % (
+            next_last_same_l1l2_train, (100 * next_last_same_l1l2_train / df_train_new.shape[0])))
+    print(
+        "->>>> nr of sequences where elem to predict is equal to the last one, considering l1: %s; proportion = %.f" % (
+            next_last_same_l1_train, (100 * next_last_same_l1_train / df_train_new.shape[0])))
+    print("->> nr of sequences where elem to predict is equal to the last one, considering l1: %s; proportion = %.f" % (
+        next_last_same_l2_train, (100 * next_last_same_l2_train / df_train_new.shape[0])))
+    print("----")
+    print("- nr of sequences where all cats l1 are different (all l2 categories unrelated): %s; proportion = %.f" % (
+        all_diff_l1_train, (100 * all_diff_l1_train / df_train_new.shape[0])))
+    print("- nr of unseen next-cat l1: %s; proportion = %.f" % (
+        unseen_cat_l1_train, (100 * unseen_cat_l1_train / df_train_new.shape[0])))
+    print("- nr of unseen next-cat l2: %s; proportion = %.f" % (
+        unseen_cat_l2_train, (100 * unseen_cat_l2_train / df_train_new.shape[0])))
+
+    print("- nr of sequences where next-category l1 is the most frequent cat in the seq: %s; proportion = %.f" % (
+        next_cat_l1_most_frequent_train, (100 * next_cat_l1_most_frequent_train / df_train_new.shape[0])))
+    print("- nr of sequences where next-category l2 is the most frequent cat in the seq: %s; proportion = %.f" % (
+        next_cat_l2_most_frequent_train, (100 * next_cat_l2_most_frequent_train / df_train_new.shape[0])))
+    #df_train_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_train_set.csv', index=False)
 
     df_val = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/validation_set.csv')
     df_val['event'] = df_val['event'].astype('category')
     df_val['event'] = df_val['event'].cat.codes
-    data_val = {'visitorid': [], 'session': [], 'sequence_events': [], 'sequence_cats_level1': [], 'next_cat_level1': [],
+    data_val = {'visitorid': [], 'session': [], 'sequence_events': [], 'sequence_cats_level1': [],
+                'next_cat_level1': [],
                 'sequence_cats_level2': [],
                 'next_cat_level2': []}
     unique_visitors_val = df_val['visitorid'].unique()
@@ -603,6 +651,11 @@ def prepare_dataset_seqs_target_moving_window():
     next_last_same_l1_val = 0
     next_last_same_l2_val = 0
     next_last_same_l1l2_val = 0
+    all_diff_l1_val = 0
+    unseen_cat_l1_val = 0
+    unseen_cat_l2_val = 0
+    next_cat_l2_most_frequent_val = 0
+    next_cat_l1_most_frequent_val = 0
 
     for current_visitor_val in unique_visitors_val:
         cats_level1_val = []
@@ -614,11 +667,12 @@ def prepare_dataset_seqs_target_moving_window():
             cats_level2_val.append(int(elem['level2']))
             events_val.append(int(elem['event']))
 
-        for k in range(0,  len(cats_level1_train)):
-            session_sequence_l1 = cats_level1_val[k:k+fixed_window_lookback]
+        for k in range(0, len(cats_level1_train)):
+
+            session_sequence_l1 = cats_level1_val[k:k + fixed_window_lookback]
             if len(session_sequence_l1) < fixed_window_lookback:
                 break
-            session_sequence_l2 = cats_level2_val[k:k+fixed_window_lookback]
+            session_sequence_l2 = cats_level2_val[k:k + fixed_window_lookback]
             data_val['visitorid'].append(current_visitor_val)
             data_val['session'].append(k)
 
@@ -640,39 +694,85 @@ def prepare_dataset_seqs_target_moving_window():
             if session_sequence_l1[-1] == session_sequence_l1[-2] and session_sequence_l2[-1] == session_sequence_l2[-2]:
                 next_last_same_l1l2_val += 1
 
+            if len(set(session_sequence_l1)) == len(session_sequence_l1):
+                print(set(session_sequence_l1))
+                print(session_sequence_l1)
+                all_diff_l1_val += 1
+
             real_next_cat_level1 = session_sequence_l1.pop()
             real_next_cat_level2 = session_sequence_l2.pop()
+
+            if real_next_cat_level1 not in session_sequence_l1:
+                unseen_cat_l1_val += 1
+
+            if real_next_cat_level2 not in session_sequence_l2:
+                unseen_cat_l2_val += 1
+
+            if max(set(session_sequence_l2), key=session_sequence_l2.count) == real_next_cat_level2:
+                next_cat_l2_most_frequent_val += 1
+
+            if max(set(session_sequence_l1), key=session_sequence_l1.count) == real_next_cat_level1:
+                next_cat_l1_most_frequent_val += 1
+
             data_val['next_cat_level1'].append(real_next_cat_level1)
             data_val['next_cat_level2'].append(real_next_cat_level2)
             data_val['sequence_cats_level1'].append(session_sequence_l1)
             data_val['sequence_cats_level2'].append(session_sequence_l2)
             data_val['sequence_events'].append(events_val)
 
-
-    print("IN VALIDATION SET: ")
-    print(" total of instances: %s" % df_val.shape[0])
-    print("- nr of sequences w/ the same category in both l1 and l2: %s ; proportion = %.f " % (seq_all_same_l1l2_val, (100*seq_all_same_l1l2_val/df_val.shape[0])))
-    print("- nr of sequences w/ the same category l1: %s ; proportion = %.f " % (seq_all_same_l1_val, (100*seq_all_same_l1_val/df_val.shape[0])))
-    print("- nr of sequences w/ the same category l2: %s ; proportion = %.f " % (seq_all_same_l2_val, (100*seq_all_same_l2_val/df_val.shape[0])))
-    print("----")
-    print("- nr of sequences where elem to predict is equal to the last one, considering both l1 and l2: %s; proportion = %.f" % (next_last_same_l1l2_val, (100*next_last_same_l1l2_val/df_val.shape[0])))
-    print("- nr of sequences where elem to predict is equal to the last one, considering l1: %s; proportion = %.f" % (next_last_same_l1_val, (100*next_last_same_l1_val/df_val.shape[0])))
-    print("- nr of sequences where elem to predict is equal to the last one, considering l1: %s; proportion = %.f" % (next_last_same_l2_val, (100*next_last_same_l2_val/df_val.shape[0])))
-
     df_val_new = pd.DataFrame(data_val)
     print(df_val_new.head(20))
-    df_val_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_val_set.csv',index=False)
+    print("IN VALIDATION SET: ")
+    print(" total of instances: %s" % df_val_new.shape[0])
+    print("- nr of sequences w/ the same category in BOTH l1 AND l2: %s ; proportion = %.f " % (
+        seq_all_same_l1l2_val, (100 * seq_all_same_l1l2_val / df_val_new.shape[0])))
+    print("->>>> nr of sequences w/ the same category l1: %s ; proportion = %.f " % (
+        seq_all_same_l1_val, (100 * seq_all_same_l1_val / df_val_new.shape[0])))
+    print("->> nr of sequences w/ the same category l2: %s ; proportion = %.f " % (
+        seq_all_same_l2_val, (100 * seq_all_same_l2_val / df_val_new.shape[0])))
+    print("----")
+    print(
+        "- nr of sequences where elem to predict is equal to the last one, considering BOTH l1 AND l2: %s; proportion = %.f" % (
+            next_last_same_l1l2_val, (100 * next_last_same_l1l2_val / df_val_new.shape[0])))
+    print(
+        "->>>> nr of sequences where elem to predict is equal to the last one, considering l1: %s; proportion = %.f" % (
+            next_last_same_l1_val, (100 * next_last_same_l1_val / df_val_new.shape[0])))
+    print("->> nr of sequences where elem to predict is equal to the last one, considering l2: %s; proportion = %.f" % (
+        next_last_same_l2_val, (100 * next_last_same_l2_val / df_val_new.shape[0])))
+    print("----")
+    print("- nr of sequences where all cats l1 are different (all l2 categories unrelated): %s; proportion = %.f" % (
+        all_diff_l1_val, (100 * all_diff_l1_val / df_val_new.shape[0])))
+    print("- nr of unseen next-cat l1: %s; proportion = %.f" % (
+        unseen_cat_l1_val, (100 * unseen_cat_l1_val / df_val_new.shape[0])))
+    print("- nr of unseen next-cat l2: %s; proportion = %.f" % (
+        unseen_cat_l2_val, (100 * unseen_cat_l2_val / df_val_new.shape[0])))
+    print("- nr of sequences where next-category l1 is the most frequent cat in the seq: %s; proportion = %.f" % (
+        next_cat_l1_most_frequent_val, (100 * next_cat_l1_most_frequent_val / df_val_new.shape[0])))
+    print("- nr of sequences where next-category l2 is the most frequent cat in the seq: %s; proportion = %.f" % (
+        next_cat_l2_most_frequent_val, (100 * next_cat_l2_most_frequent_val / df_val_new.shape[0])))
+    #df_val_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_val_set.csv', index=False)
 
     df_test = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/test_set.csv')
     df_test['event'] = df_test['event'].astype('category')
     df_test['event'] = df_test['event'].cat.codes
-    data_test = {'visitorid': [], 'session': [], 'sequence_events': [], 'sequence_cats_level1': [], 'next_cat_level1': [],
+    data_test = {'visitorid': [], 'session': [], 'sequence_events': [], 'sequence_cats_level1': [],
+                 'next_cat_level1': [],
                  'sequence_cats_level2': [],
                  'next_cat_level2': []}
     unique_visitors_test = df_test['visitorid'].unique()
 
-
     max_len_cats_sequence_test = 0
+    seq_all_same_l1_test = 0
+    seq_all_same_l2_test = 0
+    seq_all_same_l1l2_test = 0
+    next_last_same_l1_test = 0
+    next_last_same_l2_test = 0
+    next_last_same_l1l2_test = 0
+    all_diff_l1_test = 0
+    unseen_cat_l1_test = 0
+    unseen_cat_l2_test = 0
+    next_cat_l2_most_frequent_test = 0
+    next_cat_l1_most_frequent_test = 0
     for current_visitor_test in unique_visitors_test:
         cats_level1_test = []
         cats_level2_test = []
@@ -683,15 +783,52 @@ def prepare_dataset_seqs_target_moving_window():
             cats_level2_test.append(int(elem['level2']))
             events_test.append(int(elem['event']))
 
-
         for k in range(0, len(cats_level1_train)):
-            session_sequence_l1 = cats_level1_test[k:k+fixed_window_lookback]
+            session_sequence_l1 = cats_level1_test[k:k + fixed_window_lookback]
             if len(session_sequence_l1) < fixed_window_lookback:
                 break
-            session_sequence_l2 = cats_level2_test[k:k+fixed_window_lookback]
+            session_sequence_l2 = cats_level2_test[k:k + fixed_window_lookback]
             data_test['visitorid'].append(current_visitor_test)
             data_test['session'].append(k)
 
+            first_elem_l1 = session_sequence_l1[0]
+            first_elem_l2 = session_sequence_l2[0]
+            repetitions_l1 = session_sequence_l1.count(first_elem_l1)
+            repetitions_l2 = session_sequence_l2.count(first_elem_l2)
+            if repetitions_l1 == len(session_sequence_l1):
+                seq_all_same_l1_test += 1
+            if repetitions_l2 == len(session_sequence_l2):
+                seq_all_same_l2_test += 1
+            if repetitions_l2 == len(session_sequence_l2) and repetitions_l1 == len(session_sequence_l1):
+                seq_all_same_l1l2_test += 1
+
+            if session_sequence_l1[-1] == session_sequence_l1[-2]:
+                next_last_same_l1_test += 1
+            if session_sequence_l2[-1] == session_sequence_l2[-2]:
+                next_last_same_l2_test += 1
+            if session_sequence_l1[-1] == session_sequence_l1[-2] and session_sequence_l2[-1] == session_sequence_l2[
+                -2]:
+                next_last_same_l1l2_test += 1
+
+            if len(set(session_sequence_l1)) == len(session_sequence_l1):
+                print(set(session_sequence_l1))
+                print(session_sequence_l1)
+                all_diff_l1_test += 1
+
+            real_next_cat_level1 = session_sequence_l1.pop()
+            real_next_cat_level2 = session_sequence_l2.pop()
+
+            if real_next_cat_level1 not in session_sequence_l1:
+                unseen_cat_l1_test += 1
+
+            if real_next_cat_level2 not in session_sequence_l2:
+                unseen_cat_l2_test += 1
+
+            if max(set(session_sequence_l2), key=session_sequence_l2.count) == real_next_cat_level2:
+                next_cat_l2_most_frequent_test += 1
+
+            if max(set(session_sequence_l1), key=session_sequence_l1.count) == real_next_cat_level1:
+                next_cat_l1_most_frequent_test += 1
 
             real_next_cat_level1 = session_sequence_l1.pop()
             real_next_cat_level2 = session_sequence_l2.pop()
@@ -703,11 +840,51 @@ def prepare_dataset_seqs_target_moving_window():
 
     df_test_new = pd.DataFrame(data_test)
     print(df_test_new.head(20))
-    df_test_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_test_set.csv', index=False)
-
+    # df_test_new.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/shifted_test_set.csv', index=False)
 
     print("train instances = %s" % (df_train_new.shape,))
     print("validation instances = %s" % (df_val_new.shape,))
     print("test instances = %s" % (df_test_new.shape,))
+
+    sets = ['train-set', 'validation-set', 'test-set']
+    q1 = [int(100 * seq_all_same_l2_train / df_train_new.shape[0]), int(100 * seq_all_same_l2_val / df_val_new.shape[0]), int(100 * seq_all_same_l2_test / df_test_new.shape[0])]
+    q2 = [int(100 * next_last_same_l2_train / df_train_new.shape[0]), int(100 * next_last_same_l2_val / df_val_new.shape[0]), int(100 * next_last_same_l2_test / df_test_new.shape[0])]
+    q3 = [int(100 * unseen_cat_l2_train / df_train_new.shape[0]), int(100 * unseen_cat_l2_val / df_val_new.shape[0]), int(100 * unseen_cat_l2_test / df_test_new.shape[0])]
+    pos = list(range(len(q1)))
+    width = 0.10
+    fig, ax = plt.subplots(figsize=(10, 5))
+    bar1= ax.bar(pos, q1, width, alpha=0.5, color='coral')
+    bar2 = ax.bar([p + width for p in pos], q2, width, alpha=0.5, color='steelblue')
+    bar3 = ax.bar([p + width * 2 for p in pos], q3, width, alpha=0.5, color='cadetblue')
+    #ax.set_ylabel('%')
+    ax.set_xticks([p + 1.5 * width for p in pos])
+    ax.set_xticklabels(sets)
+    plt.ylim(0, 100)
+    plt.legend(['proportion of seqs. containing consecutively the same l2-category', 'proportion of seqs. where the last l2-category in the seq. equals the l2-category to predict', 'proportion of seqs. where the l2-category to predict is not contained in the seq.'],
+               loc='upper left')
+
+    def autolabel(rects, xpos='center'):
+        """
+        Attach a text label above each bar in *rects*, displaying its height.
+
+        *xpos* indicates which side to place the text w.r.t. the center of
+        the bar. It can be one of the following {'center', 'right', 'left'}.
+        """
+
+        xpos = xpos.lower()  # normalize the case of the parameter
+        ha = {'center': 'center', 'right': 'left', 'left': 'right'}
+        offset = {'center': 0.5, 'right': 0.57, 'left': 0.43}  # x_txt = x + w*off
+
+        for rect in rects:
+            height = rect.get_height()
+            ax.text(rect.get_x() + rect.get_width() * offset[xpos], 1.01 * height,
+                    '{}%'.format(height), ha=ha[xpos], va='bottom')
+
+    autolabel(bar1, "center")
+    autolabel(bar2, "center")
+    autolabel(bar3, "center")
+    plt.grid()
+    plt.show()
+    plt.savefig('proportions.png')
 
 prepare_dataset_seqs_target_moving_window()
