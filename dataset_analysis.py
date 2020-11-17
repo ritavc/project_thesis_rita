@@ -118,9 +118,17 @@ def df_final_creation():
     df_final.drop(['timestamp_2'], axis=1, inplace=True)
     df_final.sort_values(by=['timestamp'], inplace=True)
 
-    print(df_final.head())
+    # print(df_final.shape)
+    unique_visitors = df_final['visitorid'].unique()
+    # print(unique_visitors)
+
+    # print(df_final.head())
     # print("maximum cat: %s " % np.amax(df_final.value.astype(int)))
-    df_final.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items.csv', index=False)
+    # df_final.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items.csv', index=False)
+    return unique_visitors
+
+
+df_final_creation()
 
 
 ## grouping sessions by visitors, then check the length of events' sequences in time performed by each user.
@@ -163,152 +171,88 @@ def group_sessions():
 
 # group_sessions()
 
-## simple statistical analysis of the newly created dataset 'joined_events_items_longer_seqs'
-def experiments_groupings():
-    df_visitors = pd.read_csv(
-        '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items_longer_seqs.csv')
-    groups = df_visitors.groupby('visitorid')
-    print("Nr of instances in dataset: %s" % (df_visitors.shape,))
-    # print(groups.size().value_counts().head(60))
-    print("maximum: %s " % np.amax(df_visitors.value))
-    print("minimum: %s " % np.amin(df_visitors.value))
-    categories = df_visitors['value'].unique()
-    print("Distinct nr of categories: %s" % (categories.shape,))
-    users = df_visitors['visitorid'].unique()
+def statistics():
+    df = pd.read_csv(
+        '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items_no_duplicates.csv')
+    df = df[(df.level2 != int(-1))]
+    users = df['visitorid'].unique()
     print("Distinct nr of users: %s" % (users.shape,))
-
-
-## experiments to split the dataset into train and test sets. division done in time (choosing a point in time to divide)
-# includes different division points.
-# includes simple statistical analysis to check how many short/long sequences result in each division performed.
-# the goal here was to divide the users' sequences in time -> to train on the first part of the sequence and test on the other part on the same user.
-# however, the sequences turned out to be broken in too small sequences. proved out to be not a good idea then.
-## -> result: csv files 'joined_train' and 'joined_test'
-def dataset_split_time():
-    df_visitors = pd.read_csv(
-        '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items_longer_seqs.csv')
-    df_visitors.sort_values(by=['timestamp'], inplace=True)
-    train_pct_index = int(0.55 * len(df_visitors))
-    # X_train, X_test = X[:train_pct_index], X[train_pct_index:]
-    # y_train, y_test = y[:train_pct_index], y[train_pct_index:]
-    df_train, df_test = df_visitors[:train_pct_index], df_visitors[train_pct_index:]
-    print("Nr of instances in dataset train : %s" % (df_train.shape,))
-
-    print("Nr of instances in dataset test: %s" % (df_test.shape,))
-
-    categories_train = df_train['value'].unique()
-    print("Distinct nr of categories: %s" % (categories_train.shape,))
-    users_train = df_train['visitorid'].unique()
-    print("Distinct nr of users train : %s" % (users_train.shape,))
-    categories_test = df_test['value'].unique()
-    print("Distinct nr of categories: %s" % (categories_test.shape,))
-    users_test = df_test['visitorid'].unique()
-    print("Distinct nr of users test : %s" % (users_test.shape,))
-
-    groups_train = df_train.sort_values(['visitorid'], ascending=True).groupby('visitorid')
-    groups_size_train = groups_train.size()
-    print("groups train: ")
-    print(groups_size_train)
-    bigger_train = 0
-    smaller_train = 0
-    list_long_train_unique = []
-    for i, row in groups_size_train.iteritems():
-        if int(row) > 3:
-            bigger_train += 1
-            list_long_train_unique.append(i)
+    items = df['itemid'].unique()
+    print("Distinct nr of items: %s" % (items.shape,))
+    cats_items_dict_2 = {}
+    cats_items_dict_1 = {}
+    for index, row in df.iterrows():
+        if int(row['level2']) in cats_items_dict_2:
+            if int(row['itemid']) not in cats_items_dict_2.get(int(row['level2'])):
+                cats_items_dict_2[int(row['level2'])].append(int(row['itemid']))
         else:
-            smaller_train += 1
-        # print(i, row)
-
-    print("number of smaller seqs in train : {}".format(smaller_train))
-    print("number of bigger seqs in train : {}".format(bigger_train))
-
-    groups_test = df_test.sort_values(['visitorid'], ascending=True).groupby('visitorid')
-    groups_size_test = groups_test.size()
-    print("groups test: ")
-    print(groups_size_test)
-    bigger_test = 0
-    smaller_test = 0
-    list_long_test = []
-    list_small_test = []
-    for i, row in groups_size_test.iteritems():
-        if int(row) > 3:
-            bigger_test += 1
-            list_long_test.append(i)
+            cats_items_dict_2[int(row['level2'])] = [int(row['itemid'])]
+        if int(row['level1']) in cats_items_dict_1:
+            if int(row['itemid']) not in cats_items_dict_1.get(int(row['level1'])):
+                cats_items_dict_1[int(row['level1'])].append(int(row['itemid']))
         else:
-            smaller_test += 1
-            list_small_test.append(i)
+            cats_items_dict_1[int(row['level1'])] = [int(row['itemid'])]
+    #new_dict_2 = {k: v for k, v in sorted(items_cats_dict_2.items(), key=lambda item: item[1])}
+    #new_dict_1 = {k: v for k, v in sorted(items_cats_dict_1.items(), key=lambda item: item[1])}
+    #print(new_dict_2)
+    #print("****")
+    #print(new_dict_1)
+    for key_2, value_2 in cats_items_dict_2.items():
+        cats_items_dict_2[key_2] = len(value_2)
+    new_dict_2 = {k: v for k, v in sorted(cats_items_dict_2.items(), key=lambda item: item[0])}
+    print(new_dict_2)
+    cumulative_sum = 0
+    for k, v in new_dict_2.items():
+        print(v)
+        cumulative_sum += v
+        new_dict_2[k] = cumulative_sum
+    print(new_dict_2)
+    items_cats_dict_2 = {}
+    #for index, row in df.iterrows():
+    #    if int(row['itemid']) not in cats_items_dict_2:
+     #       cats_items_dict_2[int(row['itemid'])] = [int(row['level2'])]
+    #print(cats_items_dict_2)
+statistics()
 
-        # print(i, row)
-    print("number of smaller seqs in test : {}".format(smaller_test))
-    print("number of bigger seqs in test : {}".format(bigger_test))
 
-    unique_visitors_train = df_train['visitorid'].unique()
-    unique_visitors_test = df_test['visitorid'].unique()
-    common_visitors = list(set(unique_visitors_train).intersection(list(unique_visitors_test)))
-    print(len(common_visitors))
+def to_delete():
+    df_original = pd.read_csv(
+        '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items_cat_levels.csv')
+    print("before any duplicates removal: " + str(df_original.shape))
+    df_no_duplicates = pd.read_csv(
+        '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items_no_duplicates.csv')
+    print("after any duplicates removal: " + str(df_no_duplicates.shape))
+    print(df_no_duplicates['level2'].value_counts())
+    print(df_no_duplicates['level3'].value_counts())
+    df_after_division_train = pd.read_csv(
+        '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/train_set.csv')
+    df_after_division_val = pd.read_csv(
+        '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/validation_set.csv')
+    df_after_division_test = pd.read_csv(
+        '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/test_set.csv')
+    print("train set after division : " + str(df_after_division_train.shape))
+    print("validation set after division : " + str(df_after_division_val.shape))
+    print("test set after division : " + str(df_after_division_test.shape))
+    print("total after division: " + str(
+        df_after_division_train.shape[0] + df_after_division_val.shape[0] + df_after_division_test.shape[0]))
+    df_sessions_train = pd.read_csv(
+        '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/variable_train_set.csv')
+    df_sessions_val = pd.read_csv(
+        '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/variable_val_set.csv')
+    df_sessions_test = pd.read_csv(
+        '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/variable_test_set.csv')
+    print("train set after sessions creation (>3min inactivity): " + str(df_sessions_train.shape))
+    print("validation set after sessions creation (>3min inactivity): " + str(df_sessions_val.shape))
+    print("test set after sessions creation (>3min inactivity): " + str(df_sessions_test.shape))
+    print("total after sessions creation: " + str(
+        df_sessions_train.shape[0] + df_sessions_val.shape[0] + df_sessions_test.shape[0]))
 
-    new_train = df_train[df_train['visitorid'].isin(common_visitors)]
-    new_test = df_test[df_test['visitorid'].isin(common_visitors)]
-
-    groups_train_unique = new_train.sort_values(['visitorid'], ascending=True).groupby('visitorid')
-    groups_size_train_unique = groups_train_unique.size()
-    print("groups train: ")
-    print(groups_size_train_unique)
-    bigger_train_unique = 0
-    smaller_train_unique = 0
-    list_long_train_unique = []
-    for i, row in groups_size_train_unique.iteritems():
-        if int(row) > 3:
-            bigger_train_unique += 1
-            list_long_train_unique.append(i)
-        else:
-            smaller_train_unique += 1
-        # print(i, row)
-
-    print("number of smaller seqs in train unique : {}".format(smaller_train_unique))
-    print("number of bigger seqs in train unique : {}".format(bigger_train_unique))
-
-    groups_test_unique = new_test.sort_values(['visitorid'], ascending=True).groupby('visitorid')
-    groups_size_test_unique = groups_test_unique.size()
-    print("groups test: ")
-    print(groups_size_test_unique)
-    bigger_test_unique = 0
-    smaller_test_unique = 0
-    list_long_test_unique = []
-    list_small_test_unique = []
-    for i, row in groups_size_test_unique.iteritems():
-        if int(row) > 3:
-            bigger_test_unique += 1
-            list_long_test_unique.append(i)
-        else:
-            smaller_test_unique += 1
-            list_small_test_unique.append(i)
-
-        # print(i, row)
-    print("number of smaller seqs in test : {}".format(smaller_test_unique))
-    print("number of bigger seqs in test : {}".format(bigger_test_unique))
-
-    common_visitors_big = list(set(list_long_train_unique).intersection(list(list_long_test_unique)))
-    print("number of visitors with big seqs in both sides: ")
-    print(len(common_visitors_big))
-
-    common_visitors_big_small = list(set(list_long_train_unique).intersection(list(list_small_test_unique)))
-    print("number of visitors with big seqs in train and small in test: ")
-    print(len(common_visitors_big_small))
-
-    '''df_train.sort_values(['visitorid', 'timestamp'], ascending=[True, True], inplace=True)
-    df_train.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_train.csv',
-                    index=False)
-    df_test.sort_values(['visitorid', 'timestamp'], ascending=[True, True], inplace=True)
-    df_test.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_test.csv',
-                   index=False)'''
-
+#to_delete()
 
 # timelag_sessions_division()
 # prepare_dataset_seqs_target()
 # dataset_split_users()
 # dataset_split_time()
 # experiments_groupings()
-statistical_analysis_events()
+# statistical_analysis_events()
 # statistical_analysis_items()
