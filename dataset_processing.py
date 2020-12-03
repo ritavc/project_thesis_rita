@@ -6,6 +6,7 @@ import datetime
 import matplotlib.pyplot as plt
 import random
 from datetime import timedelta
+import ast
 
 pd.options.display.max_columns
 import dataset_analysis
@@ -144,7 +145,7 @@ def category_tree():
     return tree_dict, flatten_level1, flatten_level2, flatten_level3, flatten_level4, flatten_level5, flatten_level6, aux_dict_2, aux_dict_3, aux_dict_4, aux_dict_5, aux_dict_6
 
 
-#category_tree()
+# category_tree()
 
 def assign_corresponding_tree_cat_levels():
     df = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items.csv')
@@ -254,67 +255,22 @@ def timelag_sessions_duplicate_actions():
         index=False)
 
 
-#timelag_sessions_duplicate_actions()
-
-
-def filter_out_single_sessions(n):
-    df_final = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items_cat_levels.csv')
-    #'/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items_no_duplicates.csv')
-
-    # print("maximum cat: %s " % np.amax(df_final.value.astype(int)))
-    # print((df_final['value'].unique()).shape)
-
-    groups = df_final.sort_values(['visitorid'], ascending=True).groupby('visitorid')
-    groups_size = groups.size()
-    print(groups_size)
-    bigger = 0
-    smaller = 0
-    list_visitorId_consider = []
-    for i, row in groups_size.iteritems():
-        if int(row) >= n:
-            bigger += 1
-            list_visitorId_consider.append(i)
-        else:
-            smaller += 1
-        # print(i, row)
-    print("bigger: " + str(bigger))
-    print("smaller: " + str(smaller))
-    axs_x = ['shorter sequences w/ less or equal to N events', 'seq w/ more than N events']
-    axs_y = [smaller, bigger]
-    sns.barplot(axs_x, axs_y)  # , ax=axs[0])
-    # plt.show()
-    print(list_visitorId_consider)
-    df_final = df_final[df_final['visitorid'].isin(list_visitorId_consider)]
-    # print(df_final.head(30))
-    df_final = df_final[
-        ['visitorid', 'timestamp', 'event', 'itemid', 'transactionid', 'property', 'value', 'level1', 'level2',
-         'level3', 'level4', 'level5', 'level6']]
-    df_final.sort_values(['visitorid', 'timestamp'], ascending=[True, True], inplace=True)
-    print("--> most common category level-2: " + str(df_final['level2'].value_counts().idxmax()))
-    # attention: deleting here 3 entries in the dataset that only have level1 category and not its corresponding level2 category.
-    # in order to fit the purpose of predicting both category levels of the event this decision was made here.
-    df_final = df_final[(df_final.level2 != int(-1))]
-    print(df_final['level2'].value_counts().nlargest(5))
-    df_final.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_longer_seqs.csv', index=False)
-
-
-#filter_out_single_sessions(2)
+# timelag_sessions_duplicate_actions()
 
 ## division done by spliting a number of users to one side and others to the other side.
 # includes different division points.
 # includes simple statistical analysis to check how many short/long sequences result in each division performed.
 ## -> result: csv files 'train_seqs_set' and 'val_seqs_set'
 def dataset_split_by_users():
-    #df_visitors = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_longer_seqs.csv')
-    #df_visitors = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items_cat_levels.csv')
+    # df_visitors = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_longer_seqs.csv')
+    # df_visitors = pd.read_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items_cat_levels.csv')
     df_visitors = pd.read_csv(
         '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items_no_duplicates.csv')
     df_visitors = df_visitors[(df_visitors.level2 != int(-1))]
-    #times = []
-    #for i in df_visitors['timestamp']:
-     #   times.append(datetime.datetime.fromtimestamp(i // 1000.0))
-    #df_visitors['timestamp'] = times
-
+    # times = []
+    # for i in df_visitors['timestamp']:
+    #   times.append(datetime.datetime.fromtimestamp(i // 1000.0))
+    # df_visitors['timestamp'] = times
 
     unique_visitors = df_visitors[
         'visitorid'].unique()  # dataset_analysis.df_final_creation()  # df_visitors['visitorid'].unique() -> ou RANDOM aqui.
@@ -353,7 +309,6 @@ def dataset_split_by_users():
 
     groups_test = df_test.sort_values(['visitorid'], ascending=True).groupby('visitorid')
 
-
     df_train.sort_values(['visitorid', 'timestamp'], ascending=[True, True], inplace=True)
     df_train.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/train_set.csv', index=False)
     # print(df_train.head())
@@ -364,10 +319,12 @@ def dataset_split_by_users():
     df_test.to_csv('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/test_set.csv', index=False)
     # print(df_test.head())
 
-#dataset_split_by_users()
+
+# dataset_split_by_users()
 
 list_keys = list(range(2, 43))
 dict_distributions = dict.fromkeys(list_keys, 0)
+
 
 def inactivity_window_sessions_division_variable(path, new_path, minutes_div):
     print("-> sessions divisions by " + str(minutes_div) + " minutes")
@@ -375,7 +332,8 @@ def inactivity_window_sessions_division_variable(path, new_path, minutes_div):
                      parse_dates=['timestamp'])
     df['event'] = df['event'].astype('category')
     df['event'] = df['event'].cat.codes
-    data_dict = {'visitorid': [], 'session': [], 'sequence_items': [], 'next_itemId': [], 'sequence_events': [], 'sequence_cats_level1': [],
+    data_dict = {'visitorid': [], 'session': [], 'sequence_items': [], 'next_itemId': [], 'sequence_events': [],
+                 'sequence_cats_level1': [],
                  'next_cat_level1': [],
                  'sequence_cats_level2': [], 'next_cat_level2': []}
     unique_visitors = df['visitorid'].unique()
@@ -395,7 +353,7 @@ def inactivity_window_sessions_division_variable(path, new_path, minutes_div):
             hour_diff = (new_set['timestamp'].iloc[i + 1] - new_set['timestamp'].iloc[i]).seconds // 3600
             # print(new_set_train['timestamp'].iloc[i + 1] - new_set_train['timestamp'].iloc[i])
 
-            if (day_diff == 0) and (hour_diff == 0) and (minute_diff.minute < minutes_div):
+            if (day_diff == 0) and (hour_diff == 0) and (minute_diff.minute <= minutes_div):
 
                 if len(session_sequence_l1) == 0:
                     session_sequence_l1.append(new_set['level1'].iloc[i])
@@ -403,16 +361,16 @@ def inactivity_window_sessions_division_variable(path, new_path, minutes_div):
                     session_sequence_items.append(new_set['itemid'].iloc[i])
                     session_sequence_l1.append(new_set['level1'].iloc[i + 1])
                     session_sequence_l2.append(new_set['level2'].iloc[i + 1])
-                    session_sequence_items.append(new_set['itemid'].iloc[i+1])
+                    session_sequence_items.append(new_set['itemid'].iloc[i + 1])
 
                     if new_set['level2'].iloc[i] == -1 or new_set['level2'].iloc[i + 1] == -1:
-                        print("*** -1 in "+str(current_visitor))
+                        print("*** -1 in " + str(current_visitor))
                 else:
                     session_sequence_l1.append(new_set['level1'].iloc[i + 1])
                     session_sequence_l2.append(new_set['level2'].iloc[i + 1])
                     session_sequence_items.append(new_set['itemid'].iloc[i + 1])
                     if new_set['level2'].iloc[i + 1] == -1:
-                        print("*** -1 in "+str(current_visitor))
+                        print("*** -1 in " + str(current_visitor))
 
             if (i + 1) == new_set.shape[0] - 1 or (
                     (day_diff != 0) or (hour_diff != 0) or (minute_diff.minute > minutes_div)):
@@ -449,17 +407,19 @@ def inactivity_window_sessions_division_variable(path, new_path, minutes_div):
     print("TOTAL EVENTS = " + str(total_events))
     df_new.to_csv(new_path, index=False)
 
-'''
-print("###")
+
+'''print("###")
 print("TRAIN")
 inactivity_window_sessions_division_variable('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/train_set.csv', '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/variable_train_set.csv', 3)
 print("VALIDATION")
 inactivity_window_sessions_division_variable('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/validation_set.csv', '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/variable_val_set.csv', 3)
 print("TEST")
 inactivity_window_sessions_division_variable('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/test_set.csv','/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/variable_test_set.csv', 3)
+
 print(dict_distributions)
 plt.bar(dict_distributions.keys(), dict_distributions.values())
 plt.show()'''
+
 
 def fixed_size_sessions_moving_window(path, new_path, window_events, min_div):
     fixed_window_lookback = window_events  # in reality, 1 event lookback. 2 events form a sequence.
@@ -468,13 +428,15 @@ def fixed_size_sessions_moving_window(path, new_path, window_events, min_div):
                      parse_dates=['timestamp'])
     df['event'] = df['event'].astype('category')
     df['event'] = df['event'].cat.codes
-    data_dict = {'visitorid': [], 'session': [], 'sequence_items': [], 'next_itemId': [], 'sequence_events': [], 'sequence_cats_level1': [],
+    data_dict = {'visitorid': [], 'session': [], 'sequence_items': [], 'next_itemId': [], 'sequence_events': [],
+                 'sequence_cats_level1': [],
                  'next_cat_level1': [],
                  'sequence_cats_level2': [], 'next_cat_level2': []}
     unique_visitors = df['visitorid'].unique()
     maximum_length = 0
     one_event_sessions = 0
     for current_visitor in unique_visitors:
+
         events = []
         new_set = df.loc[(df.visitorid == current_visitor)]
         session_sequence_l1 = []
@@ -486,9 +448,12 @@ def fixed_size_sessions_moving_window(path, new_path, window_events, min_div):
             day_diff = (new_set['timestamp'].iloc[i + 1] - new_set['timestamp'].iloc[i]).days
             hour_diff = (new_set['timestamp'].iloc[i + 1] - new_set['timestamp'].iloc[i]).seconds // 3600
             # print(new_set_train['timestamp'].iloc[i + 1] - new_set_train['timestamp'].iloc[i])
-
-            if (day_diff == 0) and (hour_diff == 0) and (minute_diff.minute < min_div):
-
+            if current_visitor == 3465:
+                print(current_visitor)
+                print(minute_diff.minute)
+                print(new_set['itemid'].iloc[i])
+                print(new_set['itemid'].iloc[i + 1])
+            if (day_diff == 0) and (hour_diff == 0) and (minute_diff.minute <= min_div):
                 if len(session_sequence_l1) == 0:
                     session_sequence_l1.append(new_set['level1'].iloc[i])
                     session_sequence_l2.append(new_set['level2'].iloc[i])
@@ -501,12 +466,16 @@ def fixed_size_sessions_moving_window(path, new_path, window_events, min_div):
                 else:
                     session_sequence_l1.append(new_set['level1'].iloc[i + 1])
                     session_sequence_l2.append(new_set['level2'].iloc[i + 1])
-                    session_sequence_items.append(new_set['itemid'].iloc[i])
+                    session_sequence_items.append(new_set['itemid'].iloc[i + 1])
                     if new_set['level2'].iloc[i + 1] == -1:
                         print("*** -1 in " + str(current_visitor))
-
+                if current_visitor == 3465:
+                    print("first:")
+                    print(session_sequence_items)
             if (i + 1) == new_set.shape[0] - 1 or (
                     (day_diff != 0) or (hour_diff != 0) or (minute_diff.minute > min_div)):
+                if current_visitor == 3465:
+                    print("division to-do")
                 if len(session_sequence_l1) >= 2:
                     if maximum_length < len(session_sequence_l1):
                         maximum_length = len(session_sequence_l1)
@@ -519,25 +488,26 @@ def fixed_size_sessions_moving_window(path, new_path, window_events, min_div):
                         if len(session_sequence_l1_break) < fixed_window_lookback:
                             break
                         session_sequence_l2_break = session_sequence_l2[k:k + fixed_window_lookback]
-
+                        session_sequence_items_break = session_sequence_items[k:k + fixed_window_lookback]
                         data_dict['visitorid'].append(current_visitor)
                         data_dict['session'].append(k)
 
                         real_next_cat_level1 = session_sequence_l1_break.pop()
                         real_next_cat_level2 = session_sequence_l2_break.pop()
-                        real_next_itemid = session_sequence_items.pop()
+                        real_next_itemid = session_sequence_items_break.pop()
                         data_dict['next_cat_level1'].append(real_next_cat_level1)
                         data_dict['next_cat_level2'].append(real_next_cat_level2)
                         data_dict['next_itemId'].append(real_next_itemid)
                         data_dict['sequence_cats_level1'].append(session_sequence_l1_break)
                         data_dict['sequence_cats_level2'].append(session_sequence_l2_break)
-                        data_dict['sequence_items'].append(session_sequence_items)
+                        data_dict['sequence_items'].append(session_sequence_items_break)
                         data_dict['sequence_events'].append(events)
-
+                if current_visitor == 3465:
+                    print(data_dict['sequence_items'])
+                    print(data_dict['next_itemId'])
                 session_sequence_l1 = []
                 session_sequence_l2 = []
                 session_sequence_items = []
-
 
     df_new = pd.DataFrame(data_dict)
     print(df_new.head(20))
@@ -547,10 +517,114 @@ def fixed_size_sessions_moving_window(path, new_path, window_events, min_div):
     df_new.to_csv(new_path, index=False)
 
 
-print("###")
+'''print("###")
 print("TRAIN set: ")
 fixed_size_sessions_moving_window('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/train_set.csv', '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/fixed_train_set.csv', 2, 3)
 print("VALIDATION set: ")
-fixed_size_sessions_moving_window('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/validation_set.csv', '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/fixed_val_set.csv', 2, 3)
+fixed_size_sessions_moving_window('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/validation_set.csv', '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_val_set.csv', 2, 3)
 print("TEST set: ")
-fixed_size_sessions_moving_window('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/test_set.csv','/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/fixed_test_set.csv', 2, 3)
+fixed_size_sessions_moving_window('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/test_set.csv',
+                                  '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/fixed_test_set.csv', 2, 3)'''
+'''
+print("###")
+print("TRAIN set: ")
+fixed_size_sessions_moving_window('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/train_set.csv', '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_train_set_2.csv', 2, 3)
+print("VALIDATION set: ")
+fixed_size_sessions_moving_window('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/validation_set.csv', '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_val_set_2.csv', 2, 3)
+print("TEST set: ")
+fixed_size_sessions_moving_window('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/test_set.csv','/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_test_set_2.csv', 2, 3)
+print("###")
+print("TRAIN set: ")
+fixed_size_sessions_moving_window('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/train_set.csv', '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_train_set_3.csv', 3, 3)
+print("VALIDATION set: ")
+fixed_size_sessions_moving_window('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/validation_set.csv', '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_val_set_3.csv', 3, 3)
+print("TEST set: ")
+fixed_size_sessions_moving_window('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/test_set.csv','/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_test_set_3.csv', 3, 3)
+print("###")
+print("TRAIN set: ")
+fixed_size_sessions_moving_window('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/train_set.csv', '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_train_set_4.csv', 4, 3)
+print("VALIDATION set: ")
+fixed_size_sessions_moving_window('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/validation_set.csv', '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_val_set_4.csv', 4, 3)
+print("TEST set: ")
+fixed_size_sessions_moving_window('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/test_set.csv','/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_test_set_4.csv', 4, 3)
+print("###")
+print("TRAIN set: ")
+fixed_size_sessions_moving_window('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/train_set.csv', '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_train_set_5.csv', 5, 3)
+print("VALIDATION set: ")
+fixed_size_sessions_moving_window('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/validation_set.csv', '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_val_set_5.csv', 5, 3)
+print("TEST set: ")
+fixed_size_sessions_moving_window('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/test_set.csv','/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_test_set_5.csv', 5, 3)
+
+'''
+
+
+def unregular_test_set(df_from, df_to):
+    df = pd.read_csv(df_from)
+    df['sequence_cats_level2'] = [ast.literal_eval(cat_list_string) for cat_list_string in
+                                  df['sequence_cats_level2']]
+    df['sequence_items'] = [ast.literal_eval(cat_list_string) for cat_list_string in
+                            df['sequence_items']]
+    data_train = []
+    for index, row in df.iterrows():
+        data_row = []
+        if int(row['sequence_cats_level2'][0]) != int(row['next_cat_level2']) and int(row['sequence_items'][0]) != int(row['next_itemId']):
+            data_row.append([int(row['sequence_cats_level2'][0])])
+            data_row.append(int(row['next_cat_level2']))
+            data_row.append([int(row['sequence_items'][0])])
+            data_row.append(int(row['next_itemId']))
+        if len(data_row) > 0:
+            data_train.append(data_row)
+
+    df_new = pd.DataFrame(data_train,
+                          columns=['sequence_cats_level2', 'next_cat_level2', 'sequence_items', 'next_itemId'])
+
+    print(df_new.shape)
+    df_new.to_csv(df_to, index=False)
+
+
+unregular_test_set('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/fixed_train_set.csv',
+                   '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/diff_train_set.csv')
+unregular_test_set('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/fixed_val_set.csv',
+                   '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/diff_val_set.csv')
+unregular_test_set('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/fixed_test_set.csv',
+                   '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/diff_test_set.csv')
+print("###")
+print("TRAIN set: ")
+unregular_test_set('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_train_set_2.csv',
+                   '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/diff_train_set_2.csv')
+print("VALIDATION set: ")
+unregular_test_set('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_val_set_2.csv',
+                   '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/diff_val_set_2.csv')
+print("TEST set: ")
+unregular_test_set('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_test_set_2.csv',
+                   '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/diff_test_set_2.csv')
+print("###")
+print("TRAIN set: ")
+unregular_test_set('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_train_set_3.csv',
+                   '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/diff_train_set_3.csv')
+print("VALIDATION set: ")
+unregular_test_set('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_val_set_3.csv',
+                   '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/diff_val_set_3.csv')
+print("TEST set: ")
+unregular_test_set('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_test_set_3.csv',
+                   '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/diff_test_set_3.csv')
+print("###")
+print("TRAIN set: ")
+unregular_test_set('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_train_set_4.csv',
+                   '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/diff_train_set_4.csv')
+print("VALIDATION set: ")
+unregular_test_set('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_val_set_4.csv',
+                   '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/diff_val_set_4.csv')
+print("TEST set: ")
+unregular_test_set('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_test_set_4.csv',
+                   '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/diff_test_set_4.csv')
+print("###")
+print("TRAIN set: ")
+unregular_test_set('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_train_set_5.csv',
+                   '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/diff_train_set_5.csv')
+print("VALIDATION set: ")
+unregular_test_set('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_val_set_5.csv',
+                   '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/diff_val_set_5.csv')
+print("TEST set: ")
+unregular_test_set('/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/fixed_test_set_5.csv',
+                   '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/n_grams/diff_test_set_5.csv')
