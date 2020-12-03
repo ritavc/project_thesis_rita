@@ -3,6 +3,7 @@ import datetime
 import numpy as np
 import seaborn as sns
 from sklearn.preprocessing import MinMaxScaler
+import matplotlib.pyplot as plt
 
 pd.options.display.max_columns
 pd.set_option('display.max_columns', None)
@@ -181,6 +182,7 @@ def statistics():
     print("Distinct nr of items: %s" % (items.shape,))
     cats_items_dict_2 = {}
     cats_items_dict_1 = {}
+
     for index, row in df.iterrows():
         if int(row['level2']) in cats_items_dict_2:
             if int(row['itemid']) not in cats_items_dict_2.get(int(row['level2'])):
@@ -192,29 +194,67 @@ def statistics():
                 cats_items_dict_1[int(row['level1'])].append(int(row['itemid']))
         else:
             cats_items_dict_1[int(row['level1'])] = [int(row['itemid'])]
-    #new_dict_2 = {k: v for k, v in sorted(items_cats_dict_2.items(), key=lambda item: item[1])}
-    #new_dict_1 = {k: v for k, v in sorted(items_cats_dict_1.items(), key=lambda item: item[1])}
-    #print(new_dict_2)
-    #print("****")
-    #print(new_dict_1)
+    # new_dict_2 = {k: v for k, v in sorted(cats_items_dict_2.items(), key=lambda item: item[1])}
+    # new_dict_1 = {k: v for k, v in sorted(items_cats_dict_1.items(), key=lambda item: item[1])}
+    # print(new_dict_2)
+    # print("****")
+    # print(new_dict_1)
+
     for key_2, value_2 in cats_items_dict_2.items():
         cats_items_dict_2[key_2] = len(value_2)
-    new_dict_2 = {k: v for k, v in sorted(cats_items_dict_2.items(), key=lambda item: item[0])}
+    new_dict_2 = {k: v for k, v in sorted(cats_items_dict_2.items(), key=lambda item: item[1])}
     print(new_dict_2)
-    cumulative_sum = 0
-    for k, v in new_dict_2.items():
-        print(v)
-        cumulative_sum += v
-        new_dict_2[k] = cumulative_sum
-    print(new_dict_2)
+    print(len(new_dict_2))
+    plt.barh(range(len(new_dict_2)), new_dict_2.values(), align='center')
+    plt.xlabel('amount of corresponding items', fontsize=10)
+    plt.ylabel('categories level-2', fontsize=10)
+    ax = plt.gca()
+    ax.axes.yaxis.set_ticks([])
+    plt.show()
     items_cats_dict_2 = {}
-    #for index, row in df.iterrows():
-    #    if int(row['itemid']) not in cats_items_dict_2:
-     #       cats_items_dict_2[int(row['itemid'])] = [int(row['level2'])]
-    #print(cats_items_dict_2)
-statistics()
+    for index, row in df.iterrows():
+        if int(row['itemid']) not in cats_items_dict_2:
+            cats_items_dict_2[int(row['itemid'])] = [int(row['level2'])]
+    # print(cats_items_dict_2)
+    print(df["event"].value_counts())
+    print(df.shape)
 
 
+# statistics()
+
+def plot_lengths():
+    axis_x_window_length = [2, 3, 4, 5]
+    axis_y_nr_sessions = [26141, 7362, 2596, 1212]
+    axis_y_results = [0.464, 0.280, 0.113, 0.020]
+
+
+    data_plot = pd.DataFrame({"sessions length": axis_x_window_length, "number of sessions": axis_y_nr_sessions})
+    data_plot_2 = pd.DataFrame({"sessions length": axis_x_window_length, "recall@10": axis_y_results})
+
+    '''plt.bar(axis_x_window_length, axis_y_nr_sessions, align='center')
+    plt.xlabel('sessions length', fontsize=10)
+    plt.ylabel('number of sessions', fontsize=10)
+    plt.scatter(axis_x_window_length, axis_y_results)
+    plt.plot(axis_x_window_length, axis_y_results, linestyle='dashed')
+    plt.show()'''
+    # Create combo chart
+    fig, ax1 = plt.subplots(figsize=(10, 6))
+    # bar plot creation
+    ax1.set_xlabel('sessions length', fontsize=10)
+    ax1.set_ylabel('number of sessions', fontsize=10)
+    ax1 = sns.barplot(x='sessions length', y='number of sessions', data=data_plot, color='lightblue')
+
+    #ax1.tick_params(axis='y')
+
+    # specify we want to share the same x-axis
+    ax2 = ax1.twinx()
+    # line plot creation
+    ax2.set_ylabel('recall@10', fontsize=10)
+    ax2 = sns.pointplot(x='sessions length', y='recall@10', data=data_plot_2, linestyles="--", color='grey')
+    #ax2.tick_params(axis='y', color=color)
+    # show plot
+    #plt.show()
+plot_lengths()
 def to_delete():
     df_original = pd.read_csv(
         '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/joined_events_items_cat_levels.csv')
@@ -236,18 +276,18 @@ def to_delete():
     print("total after division: " + str(
         df_after_division_train.shape[0] + df_after_division_val.shape[0] + df_after_division_test.shape[0]))
     df_sessions_train = pd.read_csv(
-        '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/variable_train_set.csv')
+        '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/fixed_train_set.csv')
     df_sessions_val = pd.read_csv(
-        '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/variable_val_set.csv')
+        '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/fixed_val_set.csv')
     df_sessions_test = pd.read_csv(
-        '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/variable_test_set.csv')
+        '/Users/ritavconde/Documents/MEIC-A/Tese/ecommerce-dataset/fixed_test_set.csv')
     print("train set after sessions creation (>3min inactivity): " + str(df_sessions_train.shape))
     print("validation set after sessions creation (>3min inactivity): " + str(df_sessions_val.shape))
     print("test set after sessions creation (>3min inactivity): " + str(df_sessions_test.shape))
     print("total after sessions creation: " + str(
         df_sessions_train.shape[0] + df_sessions_val.shape[0] + df_sessions_test.shape[0]))
 
-#to_delete()
+# to_delete()
 
 # timelag_sessions_division()
 # prepare_dataset_seqs_target()
